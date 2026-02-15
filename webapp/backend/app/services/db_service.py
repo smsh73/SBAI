@@ -141,6 +141,17 @@ async def execute_query(sql: str, params: tuple = ()) -> list[dict]:
         return [dict(row) for row in rows]
 
 
+async def list_sessions() -> list[dict]:
+    """전체 세션 목록 (최신순)"""
+    async with aiosqlite.connect(str(SQLITE_DB_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, created_at, file_type, file_name, status FROM sessions ORDER BY created_at DESC"
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
 async def get_session_info(session_id: str) -> dict | None:
     async with aiosqlite.connect(str(SQLITE_DB_PATH)) as db:
         db.row_factory = aiosqlite.Row

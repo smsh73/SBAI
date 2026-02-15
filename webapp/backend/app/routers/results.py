@@ -66,18 +66,24 @@ async def get_results(session_id: str):
             sz = v.get("size", "?")
             preview["valves"]["by_size"][sz] = preview["valves"]["by_size"].get(sz, 0) + 1
 
-    # BOM 데이터 미리보기
+    # BOM 데이터 미리보기 (전체 페이지 데이터 포함)
     bom_path = session_dir / "pipe_bom_data.json"
     if bom_path.exists():
         with open(bom_path) as f:
             bom_data = json.load(f)
         total_welds = sum(pd.get("weld_count", 0) for pd in bom_data)
         total_pieces = sum(len(pd.get("pipe_pieces", [])) for pd in bom_data)
+        content_pages = [pd for pd in bom_data if pd.get("pipe_pieces")]
+        total_dims = sum(sum(pd.get("dimensions_mm", [])) for pd in bom_data)
+        loose_count = sum(1 for pd in bom_data if pd.get("has_loose"))
         preview["pipe_bom"] = {
             "total_pages": len(bom_data),
+            "content_pages": len(content_pages),
             "total_pieces": total_pieces,
             "total_welds": total_welds,
-            "sample": bom_data[:3],
+            "total_length_mm": total_dims,
+            "loose_count": loose_count,
+            "pages": bom_data,
         }
 
     return {

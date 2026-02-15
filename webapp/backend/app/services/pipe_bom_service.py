@@ -13,16 +13,39 @@ WELD_PATTERN = re.compile(r'(?:FFW|W)\d+')
 DIMENSION_PATTERN = re.compile(r'(\d{2,5})\s*(?:mm)?')
 REVISION_PATTERN = re.compile(r'REV[.\s]*([A-Z0-9]+)', re.IGNORECASE)
 
+# 표지 페이지 감지용 키워드
+COVER_KEYWORDS = ["INDEX", "TABLE OF CONTENTS", "목차", "COVER", "DRAWING LIST"]
+
+
+def _is_cover_page(text: str) -> bool:
+    """표지/목차 페이지 여부 판단"""
+    text_upper = text.upper()
+    # 파이프 피스가 하나도 없고, 표지 키워드가 있으면 표지
+    pieces = PIPE_PIECE_PATTERN.findall(text)
+    valid_pieces = [p for p in pieces if len(p) >= 4 and any(c.isdigit() for c in p)
+                    and not p.startswith(("REV", "DWG", "ISO", "PAGE"))]
+    if not valid_pieces:
+        for kw in COVER_KEYWORDS:
+            if kw in text_upper:
+                return True
+    return False
+
 
 def extract_pipe_bom(pdf_path: str) -> list[dict]:
-    """PIPE BOM PDF에서 전체 데이터 추출"""
+    """PIPE BOM PDF에서 전체 데이터 추출 (모든 페이지)"""
     doc = fitz.open(pdf_path)
     pages_data = []
+    total_pages = len(doc)
 
-    for page_num in range(len(doc)):
+    logger.info(f"Processing PIPE BOM PDF: {pdf_path} ({total_pages} pages)")
+
+    for page_num in range(total_pages):
         page = doc[page_num]
         text = page.get_text("text")
         blocks = page.get_text("blocks")
+
+        # 표지 페이지 스킵 (데이터는 기록하되 is_cover 플래그)
+        is_cover = _is_cover_page(text) if page_num == 0 else False
 
         page_data = {
             "page": page_num + 1,
@@ -35,17 +58,21 @@ def extract_pipe_bom(pdf_path: str) -> list[dict]:
             "revision_notes": [],
             "title_block": [],
             "table_text": [],
+            "is_cover": is_cover,
         }
+
+        if is_cover:
+            pages_data.append(page_data)
+            continue
 
         # 파이프 피스 추출
         pieces = PIPE_PIECE_PATTERN.findall(text)
-        # 유효한 파이프 피스만 필터링 (보통 접두사가 있음)
         valid_pieces = []
         for p in pieces:
             if len(p) >= 4 and any(c.isdigit() for c in p):
                 if not p.startswith(("REV", "DWG", "ISO", "PAGE")):
                     valid_pieces.append(p)
-        page_data["pipe_pieces"] = list(dict.fromkeys(valid_pieces))  # 중복 제거, 순서 유지
+        page_data["pipe_pieces"] = list(dict.fromkeys(valid_pieces))
 
         # 용접 항목 추출
         welds = WELD_PATTERN.findall(text)
@@ -75,21 +102,49 @@ def extract_pipe_bom(pdf_path: str) -> list[dict]:
 
         pages_data.append(page_data)
 
+        if (page_num + 1) % 10 == 0:
+            logger.info(f"  Extracted page {page_num + 1}/{total_pages}")
+
     doc.close()
-    logger.info(f"Extracted BOM data from {len(pages_data)} pages of {pdf_path}")
+    content_pages = sum(1 for p in pages_data if not p.get("is_cover") and p.get("pipe_pieces"))
+    logger.info(f"Extracted BOM data: {total_pages} total pages, {content_pages} content pages with pipe pieces")
     return pages_data
 
 
-def render_bom_pages(pdf_path: str, output_dir: str, dpi: int = 200, max_pages: int = 5) -> list[str]:
-    """PIPE BOM PDF 페이지를 이미지로 렌더링"""
+def render_bom_pages(pdf_path: str, output_dir: str, dpi: int = 0, max_pages: int = 0) -> list[str]:
+    """PIPE BOM PDF 페이지를 이미지로 렌더링 (전체 페이지)
+
+    dpi: 0이면 페이지 수에 따라 자동 결정 (<=10: 200, <=30: 150, >30: 120)
+    max_pages: 0이면 전체 페이지 렌더링
+    """
     doc = fitz.open(pdf_path)
+    total = len(doc)
     results = []
-    for i in range(min(len(doc), max_pages)):
+
+    # 페이지 수에 따라 DPI 자동 조절
+    if dpi <= 0:
+        if total <= 10:
+            dpi = 200
+        elif total <= 30:
+            dpi = 150
+        else:
+            dpi = 120
+
+    render_count = min(total, max_pages) if max_pages > 0 else total
+    logger.info(f"Rendering {render_count} BOM pages at {dpi} DPI from {pdf_path}")
+
+    for i in range(render_count):
         page = doc[i]
         mat = fitz.Matrix(dpi / 72, dpi / 72)
         pix = page.get_pixmap(matrix=mat)
         out_path = Path(output_dir) / f"bom_page{i+1}.png"
         pix.save(str(out_path))
+        pix = None  # 메모리 해제
         results.append(str(out_path))
+
+        if (i + 1) % 10 == 0:
+            logger.info(f"  Rendered page {i+1}/{render_count}")
+
     doc.close()
+    logger.info(f"Rendered {len(results)} BOM pages")
     return results

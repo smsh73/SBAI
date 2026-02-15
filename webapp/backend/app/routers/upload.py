@@ -91,6 +91,13 @@ async def _process_file(session_id: str, file_path: str, file_type: str, filenam
         await db_service.update_session_status(session_id, f"error: {str(e)[:200]}")
 
 
+@router.get("/sessions")
+async def list_sessions():
+    """세션 목록 조회 API"""
+    sessions = await db_service.list_sessions()
+    return {"sessions": sessions}
+
+
 @router.post("/upload")
 async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """파일 업로드 API"""

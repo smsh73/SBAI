@@ -477,6 +477,63 @@ button {
 .download-item .file-icon.image { background: #DBEAFE; color: #1E40AF; }
 .download-item .file-icon.json { background: #FEF3C7; color: #92400E; }
 
+/* Session list */
+.session-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.session-item:last-child {
+  border-bottom: none;
+}
+
+.session-item:hover {
+  background: var(--gray-50);
+}
+
+.session-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--gray-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .main-content { padding: 16px; }

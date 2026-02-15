@@ -1,9 +1,13 @@
-"""DXF 렌더링 & 분석 서비스 - render_dxf.py + render_views.py + render_with_dims.py + analyze_dimensions.py 통합"""
+"""DXF 렌더링 & 분석 서비스"""
 import ezdxf
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+import matplotlib.collections as mcoll
+import matplotlib.patches as mpatches
+import matplotlib.text as mtext
 from ezdxf.addons.drawing import RenderContext, Frontend
 from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 from pathlib import Path
@@ -16,7 +20,6 @@ logger = logging.getLogger(__name__)
 DIMLFAC = 75.01875305175781
 MARGIN = 5
 
-# 4개 뷰 영역 정의 (기본값 - 클러스터링으로 동적 감지도 가능)
 DEFAULT_VIEWS = {
     "view1_plan": {
         "label": "View 1 - Plan (평면도)",
@@ -52,6 +55,20 @@ def to_mm(val):
     return abs(val) * DIMLFAC
 
 
+def _cluster_values(values, tol=0.4):
+    """근접 값 클러스터링"""
+    if not values:
+        return []
+    sv = sorted(values)
+    groups = [[sv[0]]]
+    for v in sv[1:]:
+        if v - groups[-1][-1] < tol:
+            groups[-1].append(v)
+        else:
+            groups.append([v])
+    return sorted([np.mean(g) for g in groups])
+
+
 def _detect_views(doc) -> dict:
     """엔티티 클러스터링으로 뷰 영역 자동 감지"""
     msp = doc.modelspace()
@@ -73,7 +90,6 @@ def _detect_views(doc) -> dict:
     if not boxes:
         return DEFAULT_VIEWS
 
-    # 간단한 gap 기반 클러스터링
     pts = sorted(boxes, key=lambda p: p[0])
     clusters = []
     current = [pts[0]]
@@ -108,9 +124,8 @@ def _detect_views(doc) -> dict:
     return views if len(views) == 4 else DEFAULT_VIEWS
 
 
-def render_full(dxf_path: str, output_dir: str, dpi: int = 300) -> str:
+def render_full(doc, output_dir: str, dpi: int = 300) -> str:
     """전체 DXF를 PNG로 렌더링"""
-    doc = ezdxf.readfile(dxf_path)
     msp = doc.modelspace()
     fig = plt.figure(figsize=(20, 12))
     ax = fig.add_axes([0, 0, 1, 1])
@@ -127,44 +142,38 @@ def render_full(dxf_path: str, output_dir: str, dpi: int = 300) -> str:
     return str(out_path)
 
 
-def render_views(dxf_path: str, output_dir: str, dpi: int = 300) -> list[str]:
-    """4개 뷰를 각각 PNG로 렌더링"""
-    doc = ezdxf.readfile(dxf_path)
+def render_views(doc, output_dir: str, dpi: int = 300) -> list[str]:
+    """4개 뷰를 각각 PNG로 렌더링 - 1회 렌더링 후 뷰 영역 크롭"""
     views = _detect_views(doc)
+    msp = doc.modelspace()
     results = []
 
+    fig = plt.figure(figsize=(20, 12))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ctx = RenderContext(doc)
+    out = MatplotlibBackend(ax)
+    Frontend(ctx, out).draw_layout(msp)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
     for name, info in views.items():
-        msp = doc.modelspace()
-        width = info["xmax"] - info["xmin"]
-        height = info["ymax"] - info["ymin"]
-        aspect = width / max(height, 0.01)
-
-        fig_h = max(8, 10)
-        fig_w = max(10, fig_h * aspect)
-
-        fig, ax = plt.subplots(figsize=(fig_w, fig_h))
-        ctx = RenderContext(doc)
-        out = MatplotlibBackend(ax)
-        Frontend(ctx, out).draw_layout(msp)
-
         ax.set_xlim(info["xmin"], info["xmax"])
         ax.set_ylim(info["ymin"], info["ymax"])
         ax.set_aspect("equal")
-        ax.set_title(info["label"], fontsize=16, fontweight="bold", pad=15)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        for spine in ax.spines.values():
-            spine.set_visible(False)
 
         out_path = Path(output_dir) / f"{name}.png"
         fig.savefig(str(out_path), dpi=dpi, bbox_inches="tight",
                     facecolor="white", edgecolor="none", pad_inches=0.3)
-        plt.close(fig)
         results.append(str(out_path))
         logger.info(f"View render: {out_path}")
 
+    plt.close(fig)
     return results
 
+
+# ─── 2D 도면 관련 함수들 ───────────────────────────────────────
 
 def _get_entities_data(doc):
     """뷰별 엔티티 데이터 수집"""
@@ -194,223 +203,405 @@ def _get_entities_data(doc):
     return lines_by_view, polys_by_view
 
 
-def _find_major_grids(lines, polys, min_length=10.0):
-    """주요 그리드라인 좌표 추출"""
-    h_lines = []
-    v_lines = []
-    all_segs = []
+def _force_bw(ax):
+    """모든 DXF 렌더링 요소를 흑백(검정 선, 흰 배경)으로 변환"""
+    for child in list(ax.get_children()):
+        if child is ax.patch:
+            continue
+        try:
+            if isinstance(child, mlines.Line2D):
+                child.set_color('#000000')
+                child.set_linewidth(max(0.15, min(child.get_linewidth(), 0.5)))
+            elif isinstance(child, mcoll.LineCollection):
+                child.set_colors(['#000000'])
+            elif isinstance(child, (mcoll.PathCollection, mcoll.PatchCollection)):
+                child.set_edgecolors('#000000')
+                child.set_facecolors('none')
+            elif isinstance(child, mcoll.Collection):
+                child.set_edgecolors('#000000')
+                child.set_facecolors('none')
+            elif isinstance(child, mpatches.Patch):
+                child.set_edgecolor('#000000')
+                child.set_facecolor('none')
+            elif isinstance(child, mtext.Text):
+                child.set_color('#000000')
+        except Exception:
+            pass
+
+
+def _get_boundary_positions(lines, polys, min_seg_len=0.3, cluster_tol=0.4):
+    """경계선 위치 추출 - 모든 H/V 세그먼트의 위치와 끝점을 수집"""
+    segs = []
     for (x1, y1), (x2, y2) in lines:
-        all_segs.append((x1, y1, x2, y2))
+        segs.append((x1, y1, x2, y2))
     for pts in polys:
         for i in range(len(pts) - 1):
-            all_segs.append((pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]))
+            segs.append((pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]))
 
-    for x1, y1, x2, y2 in all_segs:
-        dx, dy = abs(x2 - x1), abs(y2 - y1)
-        if dy < 0.1 and dx > min_length:
-            h_lines.append(((y1 + y2) / 2, min(x1, x2), max(x1, x2), dx))
-        elif dx < 0.1 and dy > min_length:
-            v_lines.append(((x1 + x2) / 2, min(y1, y2), max(y1, y2), dy))
+    v_xs = []
+    h_ys = []
 
-    def cluster(values, tol=0.5):
-        if not values:
-            return []
-        sv = sorted(values)
-        clusters = [[sv[0]]]
-        for v in sv[1:]:
-            if v - clusters[-1][-1] < tol:
-                clusters[-1].append(v)
+    for x1, y1, x2, y2 in segs:
+        dx = abs(x2 - x1)
+        dy = abs(y2 - y1)
+        length = (dx**2 + dy**2) ** 0.5
+        if length < min_seg_len:
+            continue
+
+        if dy < 0.2:
+            h_ys.append((y1 + y2) / 2)
+            v_xs.append(min(x1, x2))
+            v_xs.append(max(x1, x2))
+        elif dx < 0.2:
+            v_xs.append((x1 + x2) / 2)
+            h_ys.append(min(y1, y2))
+            h_ys.append(max(y1, y2))
+
+    return _cluster_values(h_ys, cluster_tol), _cluster_values(v_xs, cluster_tol)
+
+
+# ─── 세그먼트 평행 치수 (PIPE BOM 스타일) ─────────────────────
+
+def _collect_unique_segments(lines, polys, min_len_mm=80):
+    """유의미한 고유 세그먼트 수집 - 중복 제거, 외곽 우선"""
+    raw = []
+    for (x1, y1), (x2, y2) in lines:
+        raw.append((x1, y1, x2, y2))
+    for pts in polys:
+        for i in range(len(pts) - 1):
+            raw.append((pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]))
+
+    # 길이 필터 + 방향 정규화 (항상 왼→오, 같으면 아래→위)
+    filtered = []
+    for x1, y1, x2, y2 in raw:
+        length = ((x2 - x1)**2 + (y2 - y1)**2)**0.5
+        length_mm = length * DIMLFAC
+        if length_mm < min_len_mm:
+            continue
+        # 방향 정규화
+        if x1 > x2 + 0.01 or (abs(x1 - x2) < 0.01 and y1 > y2):
+            x1, y1, x2, y2 = x2, y2, x1, y1
+        filtered.append((x1, y1, x2, y2, length_mm))
+
+    if not filtered:
+        return []
+
+    # 전체 중심점 계산 (외곽 방향 결정용)
+    all_x = []
+    all_y = []
+    for x1, y1, x2, y2, _ in filtered:
+        all_x.extend([x1, x2])
+        all_y.extend([y1, y2])
+    cx = np.mean(all_x)
+    cy = np.mean(all_y)
+
+    # 중복 제거: 같은 방향 + 가까운 평행 세그먼트 → 외곽 쪽 유지
+    used = set()
+    unique = []
+
+    for i in range(len(filtered)):
+        if i in used:
+            continue
+        x1, y1, x2, y2, l = filtered[i]
+        seg_len = ((x2 - x1)**2 + (y2 - y1)**2)**0.5
+        angle = np.arctan2(y2 - y1, x2 - x1)
+        mid = ((x1 + x2) / 2, (y1 + y2) / 2)
+
+        # 이 세그먼트와 유사한 것들을 그룹화
+        group = [(x1, y1, x2, y2, l, mid)]
+
+        for j in range(i + 1, len(filtered)):
+            if j in used:
+                continue
+            bx1, by1, bx2, by2, bl = filtered[j]
+            bangle = np.arctan2(by2 - by1, bx2 - bx1)
+
+            # 각도 차이 검사
+            angle_diff = abs(angle - bangle)
+            if angle_diff > np.pi:
+                angle_diff = 2 * np.pi - angle_diff
+            if angle_diff > np.radians(5):
+                continue
+
+            # 수직 거리 계산
+            if seg_len > 0.001:
+                bmid = ((bx1 + bx2) / 2, (by1 + by2) / 2)
+                perp_dist = abs((x2 - x1) * (y1 - bmid[1]) - (x1 - bmid[0]) * (y2 - y1)) / seg_len
             else:
-                clusters.append([v])
-        return [np.mean(c) for c in clusters]
+                continue
 
-    return cluster([l[0] for l in h_lines], tol=0.5), cluster([l[0] for l in v_lines], tol=0.5)
+            # 길이 유사성 검사 (70% 이상 유사)
+            len_ratio = min(l, bl) / max(l, bl) if max(l, bl) > 0 else 0
 
+            # 가까운 평행 세그먼트 (80mm 이내) + 유사한 길이 → 같은 부재의 양면
+            if perp_dist * DIMLFAC < 80 and len_ratio > 0.7:
+                used.add(j)
+                group.append((bx1, by1, bx2, by2, bl, bmid))
 
-def _add_dim_annotation(ax, p1, p2, offset, direction, color="#FF4444", fontsize=7):
-    """치수선 주석 추가"""
-    if direction == "h":
-        x1, x2 = p1[0], p2[0]
-        y = p1[1] + offset
-        dist_mm = to_mm(abs(x2 - x1))
-        ax.plot([x1, x1], [p1[1], y], color=color, linewidth=0.3, alpha=0.6)
-        ax.plot([x2, x2], [p2[1], y], color=color, linewidth=0.3, alpha=0.6)
-        ax.annotate("", xy=(x2, y), xytext=(x1, y),
-                     arrowprops=dict(arrowstyle="<->", color=color, lw=0.6))
-        ax.text((x1 + x2) / 2, y + offset * 0.15, f"{dist_mm:.0f}",
-                ha="center", va="bottom" if offset > 0 else "top",
-                fontsize=fontsize, color=color, fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.1", facecolor="white", edgecolor="none", alpha=0.85))
-    elif direction == "v":
-        y1, y2 = p1[1], p2[1]
-        x = p1[0] + offset
-        dist_mm = to_mm(abs(y2 - y1))
-        ax.plot([p1[0], x], [y1, y1], color=color, linewidth=0.3, alpha=0.6)
-        ax.plot([p2[0], x], [y2, y2], color=color, linewidth=0.3, alpha=0.6)
-        ax.annotate("", xy=(x, y2), xytext=(x, y1),
-                     arrowprops=dict(arrowstyle="<->", color=color, lw=0.6))
-        ax.text(x + offset * 0.15, (y1 + y2) / 2, f"{dist_mm:.0f}",
-                ha="left" if offset > 0 else "right", va="center",
-                fontsize=fontsize, color=color, fontweight="bold", rotation=90,
-                bbox=dict(boxstyle="round,pad=0.1", facecolor="white", edgecolor="none", alpha=0.85))
+        # 그룹 내에서 중심에서 가장 먼 세그먼트 선택 (외곽)
+        best = max(group, key=lambda s:
+            ((s[5][0] - cx)**2 + (s[5][1] - cy)**2)**0.5)
+        unique.append(best[:5])
+        used.add(i)
+
+    return unique
 
 
-def render_2d_drawing(dxf_path: str, output_dir: str, dpi: int = 300) -> list[str]:
-    """2D 도면 파일 생성 - 세부 치수 역계산 포함 (PIPE BOM 수준의 상세 도면)"""
-    doc = ezdxf.readfile(dxf_path)
+def _add_segment_parallel_dims(ax, segments, center_x, center_y):
+    """각 세그먼트에 평행한 치수를 도형 외곽에 표시 (PIPE BOM 스타일)
+
+    - 연장선: 세그먼트 끝점에서 외곽 방향으로 수직
+    - 치수선: 세그먼트와 평행, 외곽 오프셋
+    - 텍스트: 세그먼트 방향으로 회전, 가독성 확보
+    """
+    artists = []
+    DIM_C = '#555555'
+    EXT_LW = 0.2
+    DIM_LW = 0.3
+    FS = 5.5
+
+    for x1, y1, x2, y2, length_mm in segments:
+        dx = x2 - x1
+        dy = y2 - y1
+        seg_len = (dx**2 + dy**2)**0.5
+        if seg_len < 0.001:
+            continue
+
+        angle = np.arctan2(dy, dx)
+
+        # 수직 단위 벡터 (2가지 방향)
+        perp_x = -np.sin(angle)
+        perp_y = np.cos(angle)
+
+        # 외곽 방향 선택 (중심에서 반대 방향)
+        mid_x = (x1 + x2) / 2
+        mid_y = (y1 + y2) / 2
+        to_center_x = center_x - mid_x
+        to_center_y = center_y - mid_y
+
+        if perp_x * to_center_x + perp_y * to_center_y > 0:
+            perp_x = -perp_x
+            perp_y = -perp_y
+
+        # 오프셋 거리 (도형에서 충분히 떨어지도록)
+        offset = max(seg_len * 0.12, 2.0)
+        offset = min(offset, 6.0)
+        ext_len = offset * 1.2
+
+        # 연장선 1 (끝점 1에서 외곽 방향)
+        a = ax.plot([x1, x1 + perp_x * ext_len],
+                    [y1, y1 + perp_y * ext_len],
+                    color=DIM_C, lw=EXT_LW, alpha=0.4)
+        artists.append(a[0])
+
+        # 연장선 2 (끝점 2에서 외곽 방향)
+        a = ax.plot([x2, x2 + perp_x * ext_len],
+                    [y2, y2 + perp_y * ext_len],
+                    color=DIM_C, lw=EXT_LW, alpha=0.4)
+        artists.append(a[0])
+
+        # 치수선 (세그먼트와 평행, 오프셋 위치)
+        dim_x1 = x1 + perp_x * offset
+        dim_y1 = y1 + perp_y * offset
+        dim_x2 = x2 + perp_x * offset
+        dim_y2 = y2 + perp_y * offset
+
+        a = ax.annotate('', xy=(dim_x2, dim_y2), xytext=(dim_x1, dim_y1),
+                        arrowprops=dict(arrowstyle='<->', color=DIM_C, lw=DIM_LW))
+        artists.append(a)
+
+        # 텍스트 각도 (가독성: -90~90도 범위)
+        text_angle = np.degrees(angle)
+        if text_angle > 90:
+            text_angle -= 180
+        elif text_angle < -90:
+            text_angle += 180
+
+        # 텍스트 위치 (치수선 바깥쪽으로 더 띄움)
+        text_x = (dim_x1 + dim_x2) / 2 + perp_x * offset * 0.3
+        text_y = (dim_y1 + dim_y2) / 2 + perp_y * offset * 0.3
+
+        a = ax.text(text_x, text_y, f'{length_mm:.0f}',
+                    ha='center', va='center',
+                    fontsize=FS, color=DIM_C, fontweight='bold',
+                    rotation=text_angle, rotation_mode='anchor',
+                    bbox=dict(boxstyle='round,pad=0.15', fc='white', ec='none', alpha=0.95))
+        artists.append(a)
+
+    return artists
+
+
+def _add_overall_dims(ax, segments):
+    """전체 폭/높이 치수 추가 (하단 + 우측, 빨간색)"""
+    if not segments:
+        return []
+
+    artists = []
+    all_x = []
+    all_y = []
+    for x1, y1, x2, y2, _ in segments:
+        all_x.extend([x1, x2])
+        all_y.extend([y1, y2])
+
+    xmin, xmax = min(all_x), max(all_x)
+    ymin, ymax = min(all_y), max(all_y)
+    w = xmax - xmin
+    h = ymax - ymin
+
+    OVR_C = '#CC0000'
+    EXT_LW = 0.2
+    FS = 6.5
+
+    # 하단: 전체 폭
+    if w * DIMLFAC > 30:
+        step = max(h * 0.10, 1.5)
+        y_dim = ymin - step * 3.0
+        for x in [xmin, xmax]:
+            artists.append(ax.plot([x, x], [ymin, y_dim - step * 0.3],
+                                   color=OVR_C, lw=EXT_LW, alpha=0.4)[0])
+        artists.append(ax.annotate('', xy=(xmax, y_dim), xytext=(xmin, y_dim),
+                                   arrowprops=dict(arrowstyle='<->', color=OVR_C, lw=0.5)))
+        artists.append(ax.text((xmin + xmax) / 2, y_dim - step * 0.35, f'{w * DIMLFAC:.0f}',
+                               ha='center', va='top', fontsize=FS, color=OVR_C, fontweight='bold',
+                               bbox=dict(boxstyle='round,pad=0.1', fc='white', ec=OVR_C, lw=0.3, alpha=0.95)))
+
+    # 우측: 전체 높이
+    if h * DIMLFAC > 30:
+        step = max(w * 0.10, 1.5)
+        x_dim = xmax + step * 3.0
+        for y in [ymin, ymax]:
+            artists.append(ax.plot([xmax, x_dim + step * 0.3], [y, y],
+                                   color=OVR_C, lw=EXT_LW, alpha=0.4)[0])
+        artists.append(ax.annotate('', xy=(x_dim, ymax), xytext=(x_dim, ymin),
+                                   arrowprops=dict(arrowstyle='<->', color=OVR_C, lw=0.5)))
+        artists.append(ax.text(x_dim + step * 0.35, (ymin + ymax) / 2, f'{h * DIMLFAC:.0f}',
+                               ha='left', va='center', fontsize=FS, color=OVR_C, fontweight='bold',
+                               rotation=90,
+                               bbox=dict(boxstyle='round,pad=0.1', fc='white', ec=OVR_C, lw=0.3, alpha=0.95)))
+
+    return artists
+
+
+def render_2d_drawing(doc, output_dir: str, dpi: int = 300) -> list[str]:
+    """2D 도면 생성 - 흰 배경 검정 선 + 세그먼트 평행 치수 (PIPE BOM 스타일)"""
     lines_by_view, polys_by_view = _get_entities_data(doc)
+    msp = doc.modelspace()
     results = []
 
     view_configs = {
         "plan": {
             "bounds": VIEW_BOUNDS["plan"],
             "filename": "drawing_plan_dims.png",
-            "title": "Plan View (평면도) - Detailed Dimensions (mm)",
+            "title": "Plan View - Dimensions (mm)",
         },
         "front": {
             "bounds": VIEW_BOUNDS["front"],
             "filename": "drawing_front_dims.png",
-            "title": "Front Elevation (정면도) - Detailed Dimensions (mm)",
+            "title": "Front Elevation - Dimensions (mm)",
         },
         "side": {
             "bounds": VIEW_BOUNDS["side"],
             "filename": "drawing_side_dims.png",
-            "title": "Side Elevation (측면도) - Detailed Dimensions (mm)",
+            "title": "Side Elevation - Dimensions (mm)",
         },
         "iso": {
             "bounds": VIEW_BOUNDS["iso"],
             "filename": "drawing_iso_dims.png",
-            "title": "Isometric View (등각 투영도) - Dimensions (mm)",
+            "title": "Isometric View - Dimensions (mm)",
         },
     }
 
+    # 한 번만 렌더링
+    fig, ax = plt.subplots(figsize=(20, 16))
+    ctx = RenderContext(doc)
+    out = MatplotlibBackend(ax)
+    Frontend(ctx, out).draw_layout(msp)
+
+    # B&W 변환 + 불투명 흰색 배경
+    _force_bw(ax)
+    fig.patch.set_facecolor('white')
+    fig.patch.set_alpha(1.0)
+    ax.set_facecolor('white')
+    ax.patch.set_facecolor('white')
+    ax.patch.set_alpha(1.0)
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
     for view_name, config in view_configs.items():
-        msp = doc.modelspace()
         bounds = config["bounds"]
         lines = lines_by_view.get(view_name, [])
         polys = polys_by_view.get(view_name, [])
+        added = []
 
-        margin = 8
-        xmin = bounds["xmin"] + margin
-        xmax = bounds["xmax"] - margin
-        ymin = bounds["ymin"] + margin
-        ymax = bounds["ymax"] - margin
-        width = xmax - xmin
-        height = ymax - ymin
-        aspect = width / max(height, 0.01)
+        # 고유 세그먼트 수집
+        segments = _collect_unique_segments(lines, polys)
 
-        fig_h = max(10, 12)
-        fig_w = max(12, fig_h * aspect)
-        fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+        if segments:
+            all_xs = []
+            all_ys = []
+            for sx1, sy1, sx2, sy2, _ in segments:
+                all_xs.extend([sx1, sx2])
+                all_ys.extend([sy1, sy2])
+            center_x = np.mean(all_xs)
+            center_y = np.mean(all_ys)
+            ent_xmin, ent_xmax = min(all_xs), max(all_xs)
+            ent_ymin, ent_ymax = min(all_ys), max(all_ys)
+        else:
+            center_x = (bounds["xmin"] + bounds["xmax"]) / 2
+            center_y = (bounds["ymin"] + bounds["ymax"]) / 2
+            ent_xmin = bounds["xmin"] + 10
+            ent_xmax = bounds["xmax"] - 10
+            ent_ymin = bounds["ymin"] + 10
+            ent_ymax = bounds["ymax"] - 10
 
-        ctx = RenderContext(doc)
-        out = MatplotlibBackend(ax)
-        Frontend(ctx, out).draw_layout(msp)
+        # 세그먼트 평행 치수 추가
+        added += _add_segment_parallel_dims(ax, segments, center_x, center_y)
 
-        pad_x = width * 0.15
-        pad_y = height * 0.15
-        ax.set_xlim(xmin - pad_x, xmax + pad_x)
-        ax.set_ylim(ymin - pad_y, ymax + pad_y)
+        # 전체 치수 추가 (하단/우측, 빨간색)
+        added += _add_overall_dims(ax, segments)
+
+        ew = max(ent_xmax - ent_xmin, 0.01)
+        eh = max(ent_ymax - ent_ymin, 0.01)
+
+        # 균일한 패딩 (치수 표시 공간 확보 - 오프셋 증가분 반영)
+        pad = max(ew, eh) * 0.3
+        pad = max(pad, 8.0)
+        ax.set_xlim(ent_xmin - pad, ent_xmax + pad)
+        ax.set_ylim(ent_ymin - pad, ent_ymax + pad)
         ax.set_aspect("equal")
 
-        # 역계산 치수 자동 추가
-        h_ys, v_xs = _find_major_grids(lines, polys, min_length=5.0)
-
-        # 전체 범위 치수
-        if lines or polys:
-            all_x, all_y = [], []
-            for (x1, y1), (x2, y2) in lines:
-                all_x.extend([x1, x2])
-                all_y.extend([y1, y2])
-            for pts in polys:
-                for x, y in pts:
-                    all_x.append(x)
-                    all_y.append(y)
-
-            if all_x and all_y:
-                ext_xmin, ext_xmax = min(all_x), max(all_x)
-                ext_ymin, ext_ymax = min(all_y), max(all_y)
-
-                # 전체 가로 (상단)
-                _add_dim_annotation(ax, (ext_xmin, ext_ymax), (ext_xmax, ext_ymax),
-                                    offset=pad_y * 0.5, direction="h", color="#FF2222", fontsize=9)
-                # 전체 세로 (좌측)
-                _add_dim_annotation(ax, (ext_xmin, ext_ymin), (ext_xmin, ext_ymax),
-                                    offset=-pad_x * 0.5, direction="v", color="#FF2222", fontsize=9)
-
-        # 주요 그리드 간격 치수 (우측)
-        if len(h_ys) >= 2:
-            for i in range(1, min(len(h_ys), 15)):
-                gap_mm = to_mm(h_ys[i] - h_ys[i-1])
-                if gap_mm > 200:
-                    x_pos = (xmax if all_x else bounds["xmax"]) if lines or polys else bounds["xmax"]
-                    _add_dim_annotation(ax, (x_pos, h_ys[i-1]), (x_pos, h_ys[i]),
-                                        offset=pad_x * 0.3, direction="v",
-                                        color="#2288FF", fontsize=7)
-
-        # 주요 수직 그리드 간격 (하단)
-        if len(v_xs) >= 2:
-            for i in range(1, min(len(v_xs), 15)):
-                gap_mm = to_mm(v_xs[i] - v_xs[i-1])
-                if gap_mm > 200:
-                    y_pos = (ymin if all_y else bounds["ymin"]) if lines or polys else bounds["ymin"]
-                    _add_dim_annotation(ax, (v_xs[i-1], y_pos), (v_xs[i], y_pos),
-                                        offset=-pad_y * 0.3, direction="h",
-                                        color="#2288FF", fontsize=7)
-
-        # 부재 사각형 치수 (Plan 뷰만)
-        if view_name == "plan":
-            rectangles = []
-            for pts in polys:
-                n = len(pts)
-                if n in (4, 5):
-                    xs = [p[0] for p in pts[:4]]
-                    ys = [p[1] for p in pts[:4]]
-                    w = max(xs) - min(xs)
-                    h = max(ys) - min(ys)
-                    w_mm, h_mm = to_mm(w), to_mm(h)
-                    if 30 < w_mm < 600 and 30 < h_mm < 600:
-                        rectangles.append({
-                            "xmin": min(xs), "xmax": max(xs),
-                            "ymin": min(ys), "ymax": max(ys),
-                            "w_mm": w_mm, "h_mm": h_mm,
-                        })
-
-            # 주요 부재(50mm 이상)에 크기 라벨 추가
-            shown = 0
-            for r in sorted(rectangles, key=lambda r: r["w_mm"] * r["h_mm"], reverse=True):
-                if shown >= 20:
-                    break
-                if r["w_mm"] > 80 and r["h_mm"] > 80:
-                    cx = (r["xmin"] + r["xmax"]) / 2
-                    cy = (r["ymin"] + r["ymax"]) / 2
-                    ax.text(cx, cy, f"{r['w_mm']:.0f}x{r['h_mm']:.0f}",
-                            ha="center", va="center", fontsize=5, color="#884400",
-                            bbox=dict(boxstyle="round,pad=0.1", facecolor="lightyellow",
-                                      edgecolor="#CCAA00", alpha=0.8))
-                    shown += 1
-
-        ax.set_title(config["title"], fontsize=14, fontweight="bold", pad=15)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-        ax.text(0.02, 0.02, f"Scale: 1 unit = {DIMLFAC:.1f} mm | DIMLFAC = {DIMLFAC}",
-                transform=ax.transAxes, fontsize=8, color="gray", verticalalignment="bottom")
+        # 타이틀 & 스케일
+        title_a = ax.set_title(config["title"], fontsize=13, fontweight="bold", pad=12, color='#333333')
+        scale_a = ax.text(0.02, 0.01,
+                          f"DIMLFAC = {DIMLFAC:.2f} | 1 unit = {DIMLFAC:.1f} mm",
+                          transform=ax.transAxes, fontsize=7, color="#888888",
+                          verticalalignment="bottom")
+        added.extend([title_a, scale_a])
 
         out_path = Path(output_dir) / config["filename"]
         fig.savefig(str(out_path), dpi=dpi, bbox_inches="tight",
                     facecolor="white", edgecolor="none", pad_inches=0.3)
-        plt.close(fig)
         results.append(str(out_path))
         logger.info(f"2D drawing: {out_path}")
 
+        # 다음 뷰를 위해 주석 제거
+        for a in added:
+            try:
+                a.remove()
+            except Exception:
+                pass
+
+    plt.close(fig)
     return results
 
 
-def analyze_dimensions(dxf_path: str) -> dict:
+# ─── 치수 분석 ───────────────────────────────────────────
+
+def analyze_dimensions(doc) -> dict:
     """DXF 치수 역산 분석 결과를 JSON으로 반환"""
-    doc = ezdxf.readfile(dxf_path)
     lines_by_view, polys_by_view = _get_entities_data(doc)
 
     result = {"dimlfac": DIMLFAC, "views": {}}
@@ -418,7 +609,7 @@ def analyze_dimensions(dxf_path: str) -> dict:
     for view_name, bounds in VIEW_BOUNDS.items():
         lines = lines_by_view.get(view_name, [])
         polys = polys_by_view.get(view_name, [])
-        h_ys, v_xs = _find_major_grids(lines, polys, min_length=10.0)
+        h_ys, v_xs = _get_boundary_positions(lines, polys)
 
         all_x, all_y = [], []
         for (x1, y1), (x2, y2) in lines:
@@ -433,21 +624,12 @@ def analyze_dimensions(dxf_path: str) -> dict:
             "entity_count": len(lines) + len(polys),
             "overall_width_mm": round(to_mm(max(all_x) - min(all_x)), 0) if all_x else 0,
             "overall_height_mm": round(to_mm(max(all_y) - min(all_y)), 0) if all_y else 0,
-            "h_grid_spacings_mm": [],
-            "v_grid_spacings_mm": [],
+            "h_boundary_count": len(h_ys),
+            "v_boundary_count": len(v_xs),
+            "h_spacings_mm": [round(to_mm(h_ys[i] - h_ys[i-1])) for i in range(1, len(h_ys))],
+            "v_spacings_mm": [round(to_mm(v_xs[i] - v_xs[i-1])) for i in range(1, len(v_xs))],
         }
 
-        for i in range(1, len(h_ys)):
-            gap_mm = round(to_mm(h_ys[i] - h_ys[i-1]), 0)
-            if gap_mm > 100:
-                view_data["h_grid_spacings_mm"].append(gap_mm)
-
-        for i in range(1, len(v_xs)):
-            gap_mm = round(to_mm(v_xs[i] - v_xs[i-1]), 0)
-            if gap_mm > 100:
-                view_data["v_grid_spacings_mm"].append(gap_mm)
-
-        # 부재 분석 (Plan 뷰만)
         if view_name == "plan":
             rectangles = []
             for pts in polys:
@@ -459,7 +641,6 @@ def analyze_dimensions(dxf_path: str) -> dict:
                     if to_mm(w) > 30 and to_mm(h) > 30:
                         rectangles.append({"w_mm": round(to_mm(w)), "h_mm": round(to_mm(h))})
             view_data["detected_members"] = len(rectangles)
-            # 크기별 그룹핑
             size_groups = defaultdict(int)
             for r in rectangles:
                 w_r = round(r["w_mm"] / 10) * 10
@@ -477,12 +658,14 @@ def process_dxf(dxf_path: str, output_dir: str) -> dict:
     """전체 DXF 처리 파이프라인"""
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    full_png = render_full(dxf_path, output_dir)
-    view_pngs = render_views(dxf_path, output_dir)
-    drawing_pngs = render_2d_drawing(dxf_path, output_dir)
-    dimensions = analyze_dimensions(dxf_path)
+    doc = ezdxf.readfile(dxf_path)
+    logger.info(f"DXF loaded: {dxf_path}")
 
-    # 치수 분석 JSON 저장
+    full_png = render_full(doc, output_dir)
+    view_pngs = render_views(doc, output_dir)
+    drawing_pngs = render_2d_drawing(doc, output_dir)
+    dimensions = analyze_dimensions(doc)
+
     dim_path = Path(output_dir) / "dimensions.json"
     with open(dim_path, "w") as f:
         json.dump(dimensions, f, indent=2, ensure_ascii=False)

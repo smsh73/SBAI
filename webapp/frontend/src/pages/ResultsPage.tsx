@@ -1,27 +1,50 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Download, Image, FileSpreadsheet, Eye, X, ZoomIn,
-  ChevronLeft, RefreshCw, Package, Wrench
+  Download, Image, FileSpreadsheet, X, ZoomIn,
+  ChevronLeft, ChevronRight, RefreshCw, Package, Wrench
 } from "lucide-react";
 
 const API = "/api";
+
+interface FileEntry { name: string; path: string; size: number }
+
+interface BomPage {
+  page: number;
+  pipe_pieces: string[];
+  weld_count: number;
+  weld_items: string[];
+  dimensions_mm: number[];
+  has_loose: boolean;
+  is_cover?: boolean;
+}
 
 interface SessionResult {
   session_id: string;
   status: string;
   file_type: string;
   file_name: string;
-  files: { name: string; path: string; size: number }[];
-  images: { name: string; path: string; size: number }[];
-  excel_files: { name: string; path: string; size: number }[];
-  json_files: { name: string; path: string; size: number }[];
+  files: FileEntry[];
+  images: FileEntry[];
+  excel_files: FileEntry[];
+  json_files: FileEntry[];
   preview: {
     dimensions?: any;
     valves?: { total: number; by_type: Record<string, number>; by_size: Record<string, number>; sample: any[] };
-    pipe_bom?: { total_pages: number; total_pieces: number; total_welds: number; sample: any[] };
+    pipe_bom?: {
+      total_pages: number;
+      content_pages: number;
+      total_pieces: number;
+      total_welds: number;
+      total_length_mm: number;
+      loose_count: number;
+      pages: BomPage[];
+    };
   };
 }
+
+const IMG_PAGE_SIZE = 12;
+const BOM_PAGE_SIZE = 20;
 
 export default function ResultsPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -31,6 +54,8 @@ export default function ResultsPage() {
   const [error, setError] = useState("");
   const [modalImage, setModalImage] = useState<string | null>(null);
   const [inputSession, setInputSession] = useState(sessionId || "");
+  const [imgPage, setImgPage] = useState(0);
+  const [bomPage, setBomPage] = useState(0);
 
   const loadResults = useCallback(async (sid: string) => {
     setLoading(true);
@@ -51,7 +76,6 @@ export default function ResultsPage() {
     if (sessionId) loadResults(sessionId);
   }, [sessionId, loadResults]);
 
-  // 자동 갱신 (processing 상태일 때)
   useEffect(() => {
     if (data?.status === "processing" && sessionId) {
       const timer = setInterval(() => loadResults(sessionId), 3000);
@@ -93,6 +117,15 @@ export default function ResultsPage() {
       </div>
     );
   }
+
+  // 이미지 페이지네이션 계산
+  const totalImgPages = data ? Math.ceil(data.images.length / IMG_PAGE_SIZE) : 0;
+  const visibleImages = data ? data.images.slice(imgPage * IMG_PAGE_SIZE, (imgPage + 1) * IMG_PAGE_SIZE) : [];
+
+  // BOM 페이지네이션 계산
+  const bomData = data?.preview.pipe_bom?.pages || [];
+  const totalBomPages = Math.ceil(bomData.length / BOM_PAGE_SIZE);
+  const visibleBom = bomData.slice(bomPage * BOM_PAGE_SIZE, (bomPage + 1) * BOM_PAGE_SIZE);
 
   return (
     <div>
@@ -150,6 +183,14 @@ export default function ResultsPage() {
               {data.preview.pipe_bom && (
                 <>
                   <div className="stat-card">
+                    <div className="value">{data.preview.pipe_bom.total_pages}</div>
+                    <div className="label">전체 페이지</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="value">{data.preview.pipe_bom.content_pages}</div>
+                    <div className="label">내용 페이지</div>
+                  </div>
+                  <div className="stat-card">
                     <div className="value">{data.preview.pipe_bom.total_pieces}</div>
                     <div className="label">파이프 피스</div>
                   </div>
@@ -157,10 +198,18 @@ export default function ResultsPage() {
                     <div className="value">{data.preview.pipe_bom.total_welds}</div>
                     <div className="label">용접 항목</div>
                   </div>
-                  <div className="stat-card">
-                    <div className="value">{data.preview.pipe_bom.total_pages}</div>
-                    <div className="label">BOM 페이지</div>
-                  </div>
+                  {data.preview.pipe_bom.total_length_mm > 0 && (
+                    <div className="stat-card">
+                      <div className="value">{(data.preview.pipe_bom.total_length_mm / 1000).toFixed(1)}m</div>
+                      <div className="label">총 파이프 길이</div>
+                    </div>
+                  )}
+                  {data.preview.pipe_bom.loose_count > 0 && (
+                    <div className="stat-card">
+                      <div className="value">{data.preview.pipe_bom.loose_count}</div>
+                      <div className="label">LOOSE 파트</div>
+                    </div>
+                  )}
                 </>
               )}
               {data.preview.dimensions && (
@@ -172,16 +221,41 @@ export default function ResultsPage() {
             </div>
           )}
 
-          {/* 이미지 미리보기 */}
+          {/* 이미지 미리보기 (페이지네이션) */}
           {data.images.length > 0 && (
             <div className="card" style={{ marginBottom: 24 }}>
               <div className="card-header">
                 <h3><Image size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />렌더링 이미지 미리보기</h3>
-                <span style={{ fontSize: 13, color: "var(--gray-500)" }}>{data.images.length}개 파일</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, color: "var(--gray-500)" }}>{data.images.length}개 파일</span>
+                  {totalImgPages > 1 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <button
+                        className="btn btn-outline"
+                        style={{ padding: "4px 8px" }}
+                        disabled={imgPage === 0}
+                        onClick={() => setImgPage(p => p - 1)}
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                      <span style={{ fontSize: 12, color: "var(--gray-500)", minWidth: 60, textAlign: "center" }}>
+                        {imgPage + 1} / {totalImgPages}
+                      </span>
+                      <button
+                        className="btn btn-outline"
+                        style={{ padding: "4px 8px" }}
+                        disabled={imgPage >= totalImgPages - 1}
+                        onClick={() => setImgPage(p => p + 1)}
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="card-body">
                 <div className="image-grid">
-                  {data.images.map((img) => (
+                  {visibleImages.map((img) => (
                     <div key={img.name} className="image-card" onClick={() => setModalImage(img.path)}>
                       <img src={img.path} alt={img.name} loading="lazy" />
                       <div className="label">
@@ -243,27 +317,67 @@ export default function ResultsPage() {
             </div>
           )}
 
-          {/* BOM 미리보기 */}
-          {data.preview.pipe_bom && (
+          {/* BOM 전체 데이터 테이블 (페이지네이션) */}
+          {data.preview.pipe_bom && bomData.length > 0 && (
             <div className="card" style={{ marginBottom: 24 }}>
               <div className="card-header">
                 <h3><Package size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />PIPE BOM 데이터</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, color: "var(--gray-500)" }}>{bomData.length}개 페이지</span>
+                  {totalBomPages > 1 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <button
+                        className="btn btn-outline"
+                        style={{ padding: "4px 8px" }}
+                        disabled={bomPage === 0}
+                        onClick={() => setBomPage(p => p - 1)}
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                      <span style={{ fontSize: 12, color: "var(--gray-500)", minWidth: 60, textAlign: "center" }}>
+                        {bomPage + 1} / {totalBomPages}
+                      </span>
+                      <button
+                        className="btn btn-outline"
+                        style={{ padding: "4px 8px" }}
+                        disabled={bomPage >= totalBomPages - 1}
+                        onClick={() => setBomPage(p => p + 1)}
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="card-body">
                 <div style={{ overflowX: "auto" }}>
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>Page</th><th>Pipe Pieces</th><th>Welds</th><th>Dimensions</th><th>Loose</th>
+                        <th>Page</th>
+                        <th>Pipe Pieces</th>
+                        <th>피스 수</th>
+                        <th>Welds</th>
+                        <th>용접 항목</th>
+                        <th>치수 (mm)</th>
+                        <th>Loose</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.preview.pipe_bom.sample.map((pd: any, i: number) => (
-                        <tr key={i}>
-                          <td>{pd.page}</td>
-                          <td>{(pd.pipe_pieces || []).join(", ") || "-"}</td>
-                          <td>{pd.weld_count}</td>
-                          <td>{(pd.dimensions_mm || []).join(", ") || "-"}</td>
+                      {visibleBom.map((pd: BomPage) => (
+                        <tr key={pd.page} style={pd.is_cover ? { opacity: 0.5 } : undefined}>
+                          <td style={{ fontWeight: 600 }}>{pd.page}</td>
+                          <td style={{ maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {(pd.pipe_pieces || []).join(", ") || "-"}
+                          </td>
+                          <td>{(pd.pipe_pieces || []).length || "-"}</td>
+                          <td>{pd.weld_count || "-"}</td>
+                          <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {(pd.weld_items || []).join(", ") || "-"}
+                          </td>
+                          <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {(pd.dimensions_mm || []).join(", ") || "-"}
+                          </td>
                           <td>{pd.has_loose ? "Yes" : "-"}</td>
                         </tr>
                       ))}
@@ -298,20 +412,22 @@ export default function ResultsPage() {
                     </a>
                   </div>
                 ))}
-                {data.images.map((f) => (
-                  <div key={f.name} className="download-item">
+                {data.images.length > 0 && (
+                  <div className="download-item">
                     <div className="file-info">
                       <div className="file-icon image"><Image size={18} /></div>
                       <div>
-                        <div style={{ fontWeight: 500 }}>{f.name}</div>
-                        <div style={{ fontSize: 12, color: "var(--gray-500)" }}>{(f.size / 1024).toFixed(0)} KB</div>
+                        <div style={{ fontWeight: 500 }}>이미지 파일 ({data.images.length}개)</div>
+                        <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
+                          {(data.images.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024).toFixed(1)} MB
+                        </div>
                       </div>
                     </div>
-                    <a href={`${API}/download/${sessionId}/${f.name}`} className="btn btn-outline" style={{ padding: "4px 12px", fontSize: 13 }}>
-                      <Download size={14} /> 다운로드
+                    <a href={`${API}/download/${sessionId}`} className="btn btn-outline" style={{ padding: "4px 12px", fontSize: 13 }}>
+                      <Download size={14} /> ZIP 다운로드
                     </a>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>

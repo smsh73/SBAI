@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Upload, FileText, Cog, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, FileText, Cog, CheckCircle, AlertCircle, Clock, ChevronRight } from "lucide-react";
 
 const API = "/api";
 
@@ -12,13 +12,49 @@ interface UploadResult {
   message: string;
 }
 
+interface SessionItem {
+  id: string;
+  created_at: string;
+  file_type: string;
+  file_name: string;
+  status: string;
+}
+
+const FILE_TYPE_LABELS: Record<string, string> = {
+  dxf: "DXF",
+  pid: "P&ID",
+  pipe_bom: "PIPE BOM",
+  pdf: "PDF",
+};
+
+function formatDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const mins = String(d.getMinutes()).padStart(2, "0");
+    return `${month}/${day} ${hours}:${mins}`;
+  } catch {
+    return dateStr;
+  }
+}
+
 export default function UploadPage() {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [results, setResults] = useState<UploadResult[]>([]);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  // 페이지 로드 시 세션 목록 가져오기
+  useEffect(() => {
+    fetch(`${API}/sessions`)
+      .then((res) => res.json())
+      .then((data) => setSessions(data.sessions || []))
+      .catch(() => {});
+  }, []);
 
   const uploadFile = useCallback(async (file: File) => {
     setUploading(true);
@@ -33,13 +69,25 @@ export default function UploadPage() {
         throw new Error(errData.detail || "업로드 실패");
       }
       const data: UploadResult = await res.json();
-      setResults((prev) => [data, ...prev]);
+      // 새 세션을 목록 상단에 추가
+      setSessions((prev) => [
+        {
+          id: data.session_id,
+          created_at: new Date().toISOString(),
+          file_type: data.file_type,
+          file_name: data.file_name,
+          status: data.status,
+        },
+        ...prev,
+      ]);
+      // 바로 결과 페이지로 이동
+      navigate(`/results/${data.session_id}`);
     } catch (e: any) {
       setError(e.message || "업로드 중 오류 발생");
     } finally {
       setUploading(false);
     }
-  }, []);
+  }, [navigate]);
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -58,6 +106,31 @@ export default function UploadPage() {
     },
     [uploadFile]
   );
+
+  const getStatusBadge = (status: string) => {
+    if (status === "completed") {
+      return (
+        <span className="badge badge-completed" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <CheckCircle size={12} /> 완료
+        </span>
+      );
+    }
+    if (status === "processing") {
+      return (
+        <span className="badge badge-processing" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <Cog size={12} className="spinner" /> 처리 중
+        </span>
+      );
+    }
+    if (status.startsWith("error")) {
+      return (
+        <span className="badge" style={{ background: "#FEE2E2", color: "#DC2626", display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <AlertCircle size={12} /> 오류
+        </span>
+      );
+    }
+    return <span className="badge">{status}</span>;
+  };
 
   return (
     <div>
@@ -106,53 +179,38 @@ export default function UploadPage() {
         </div>
       )}
 
-      {results.length > 0 && (
-        <div className="card">
+      {sessions.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
           <div className="card-header">
-            <h3>업로드 이력</h3>
+            <h3>처리 이력</h3>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>파일명</th>
-                  <th>유형</th>
-                  <th>상태</th>
-                  <th>작업</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r) => (
-                  <tr key={r.session_id}>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <FileText size={16} color="var(--navy-light)" />
-                        {r.file_name}
-                      </div>
-                    </td>
-                    <td>
-                      <span className="format-badge" style={{ fontSize: 11 }}>
-                        {r.file_type.toUpperCase()}
+            <div className="session-list">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="session-item"
+                  onClick={() => navigate(`/results/${s.id}`)}
+                >
+                  <div className="session-icon">
+                    <FileText size={24} color="var(--navy-light)" />
+                  </div>
+                  <div className="session-info">
+                    <div className="session-name">{s.file_name}</div>
+                    <div className="session-meta">
+                      <span className="format-badge" style={{ fontSize: 10, padding: "1px 6px" }}>
+                        {FILE_TYPE_LABELS[s.file_type] || s.file_type.toUpperCase()}
                       </span>
-                    </td>
-                    <td>
-                      <span className={`badge badge-${r.status === "processing" ? "processing" : "completed"}`}>
-                        {r.status === "processing" ? "처리 중" : "완료"}
+                      <span style={{ color: "var(--gray-400)", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                        <Clock size={11} /> {formatDate(s.created_at)}
                       </span>
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-outline"
-                        style={{ padding: "4px 12px", fontSize: 13 }}
-                        onClick={() => navigate(`/results/${r.session_id}`)}
-                      >
-                        결과 보기
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      {getStatusBadge(s.status)}
+                    </div>
+                  </div>
+                  <ChevronRight size={20} color="var(--gray-300)" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
