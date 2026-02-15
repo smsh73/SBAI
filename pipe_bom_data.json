@@ -1,0 +1,1837 @@
+[
+  {
+    "page": 1,
+    "pipe_pieces": [
+      "PG101-1",
+      "PG101-2",
+      "PG101-3",
+      "PG101-4"
+    ],
+    "weld_count": 35,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W26",
+      "W27",
+      "W28",
+      "W29",
+      "W30",
+      "W31",
+      "W32",
+      "W33",
+      "W34",
+      "W35"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "250512 : SUPPORT수정"
+    ],
+    "title_block": [
+      "PG101-1",
+      "PG101-4"
+    ],
+    "table_text": [
+      "PI\n12",
+      "PE CLAMP LATERAL\n2. 829. 659. 041"
+    ]
+  },
+  {
+    "page": 2,
+    "pipe_pieces": [
+      "PG119-1",
+      "PG119-2"
+    ],
+    "weld_count": 21,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "개정된 부분 알 수 없음"
+    ],
+    "title_block": [],
+    "table_text": []
+  },
+  {
+    "page": 3,
+    "pipe_pieces": [
+      "PG120-1",
+      "PG120-2",
+      "PG120-3"
+    ],
+    "weld_count": 23,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23"
+    ],
+    "dimensions_mm": [
+      617,
+      329,
+      260,
+      228,
+      166
+    ],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG120-3"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 4,
+    "pipe_pieces": [
+      "PG142-1",
+      "PG142-2"
+    ],
+    "weld_count": 17,
+    "weld_items": [
+      "W1",
+      "FFW2",
+      "W3",
+      "W4",
+      "W5",
+      "FFW6",
+      "W7",
+      "W8",
+      "W9",
+      "FFW10",
+      "W11",
+      "W12",
+      "FFW13",
+      "W14",
+      "W15",
+      "W16",
+      "FFW17"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정",
+      "3. CLAMP 수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정\n3. CLAMP 수정"
+    ]
+  },
+  {
+    "page": 5,
+    "pipe_pieces": [
+      "PG121-1",
+      "PG121-2",
+      "PG121-3",
+      "PG121-4"
+    ],
+    "weld_count": 16,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "FFW12",
+      "W13",
+      "W14",
+      "W15",
+      "W16"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": true,
+    "revision_notes": [
+      "1. CLAMP 수정"
+    ],
+    "title_block": [
+      "PG121-4"
+    ],
+    "table_text": [
+      "250512 :\n1. CLAMP 수정"
+    ]
+  },
+  {
+    "page": 6,
+    "pipe_pieces": [
+      "PG123-1",
+      "PG123-2"
+    ],
+    "weld_count": 11,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "1. CLAMP 수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "250512 :\n1. CLAMP 수정"
+    ]
+  },
+  {
+    "page": 7,
+    "pipe_pieces": [
+      "PG124-1",
+      "PG124-2",
+      "PG124-3"
+    ],
+    "weld_count": 20,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. CLAMP 수정"
+    ],
+    "title_block": [
+      "PG124-2",
+      "PG124-3"
+    ],
+    "table_text": [
+      "250512 :\nW4\nW5\n1. 배관길이변경\n2. CLAMP 수정\nW6\nW7\nPG124-1 W3 W2\nW14\nW8\nW15\nW16\nW9\nW17\nW18\nW19 W1\nPG124-3\nPG124-2\nW20\nW10\nW11\nW12\nW13\nPG124-1\nPG124-2 PG124-3"
+    ]
+  },
+  {
+    "page": 8,
+    "pipe_pieces": [
+      "PG125-1"
+    ],
+    "weld_count": 4,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "250512 : SUPPORT수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "PIPE CLAMP LAT\n122. 829. 659. 03",
+      "ERAL\n4"
+    ]
+  },
+  {
+    "page": 9,
+    "pipe_pieces": [
+      "PG125-2"
+    ],
+    "weld_count": 7,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "250512 : SUPPORT수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "PIPE CLAMP LATERAL\n122. 829. 659. 031"
+    ]
+  },
+  {
+    "page": 10,
+    "pipe_pieces": [
+      "PG126-1",
+      "PG126-2",
+      "PG126-3",
+      "PG126-4",
+      "PG126-5"
+    ],
+    "weld_count": 21,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "FFW8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W26"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": true,
+    "revision_notes": [],
+    "title_block": [
+      "PG126-2",
+      "(Loose)",
+      "PG126-1"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 11,
+    "pipe_pieces": [
+      "PG127-1",
+      "PG127-2",
+      "PG127-3",
+      "PG127-4"
+    ],
+    "weld_count": 22,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22"
+    ],
+    "dimensions_mm": [
+      289,
+      204,
+      455,
+      938,
+      1290,
+      219,
+      204,
+      99
+    ],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG127-1",
+      "PG127-1",
+      "PG127-3",
+      "PG127-2"
+    ],
+    "table_text": [
+      "22. 829. 659. 036",
+      "22. 829. 659. 031"
+    ]
+  },
+  {
+    "page": 12,
+    "pipe_pieces": [
+      "PG128-1",
+      "PG128-2",
+      "PG128-3",
+      "PG128-4",
+      "PG128-5"
+    ],
+    "weld_count": 28,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W26",
+      "W27",
+      "W28"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG128-1"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 13,
+    "pipe_pieces": [
+      "PG129-1",
+      "PG129-2",
+      "PG129-3",
+      "PG129-4",
+      "PG129-5"
+    ],
+    "weld_count": 27,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W26",
+      "W27"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "250512 : SUPPORT수정"
+    ],
+    "title_block": [
+      "PG129-1"
+    ],
+    "table_text": [
+      "PI\n12",
+      "PE CLAMP LATERAL\n2. 829. 659. 033",
+      "2. 829. 659. 031"
+    ]
+  },
+  {
+    "page": 14,
+    "pipe_pieces": [
+      "PG130-1",
+      "PG130-2",
+      "PG130-3",
+      "PG130-4"
+    ],
+    "weld_count": 38,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W26",
+      "W27",
+      "W28",
+      "W29",
+      "W30",
+      "W31",
+      "W32",
+      "W33",
+      "W34",
+      "W35",
+      "W36",
+      "W37",
+      "W38"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "1. 배관수정",
+      "2. CLAMP수정"
+    ],
+    "title_block": [
+      "PG130-1"
+    ],
+    "table_text": [
+      "122. 820. 922. 033"
+    ]
+  },
+  {
+    "page": 15,
+    "pipe_pieces": [
+      "PG139-1",
+      "PG139-2",
+      "PG139-3"
+    ],
+    "weld_count": 21,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관수정",
+      "2. CLAMP수정"
+    ],
+    "title_block": [
+      "PG139-1",
+      "(Loose)"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 16,
+    "pipe_pieces": [
+      "PG138-1",
+      "PG138-2"
+    ],
+    "weld_count": 27,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "FFW10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "FFW15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "FFW22",
+      "W23",
+      "W24",
+      "W25",
+      "FFW26",
+      "W27"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관수정",
+      "2. CLAMP수정"
+    ],
+    "title_block": [
+      "(Loose)"
+    ],
+    "table_text": [
+      "250512 :\n1. 배관수정\n2. CLAMP수정\n3. 일부분 W-->FFW"
+    ]
+  },
+  {
+    "page": 17,
+    "pipe_pieces": [
+      "PG137-1",
+      "PG137-2",
+      "PG137-3"
+    ],
+    "weld_count": 19,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG137-1",
+      "PG137-2"
+    ],
+    "table_text": [
+      "W19\nPG137-3\nW12\nW11\nW18\nW10\nW17\nW9\nPG137-2\nW16\nW15\nW14 W13\nW7\nW8\nW6\nW4\nPG137-1\nW5\nW3 W2\nW1\nPG137-3\nPG137-1\nPG137-2"
+    ]
+  },
+  {
+    "page": 18,
+    "pipe_pieces": [
+      "PG137-4",
+      "PG137-5"
+    ],
+    "weld_count": 18,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG137-5"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 19,
+    "pipe_pieces": [
+      "PG136-1",
+      "PG136-2",
+      "PG136-3",
+      "PG136-4",
+      "PG136-5",
+      "PG136-6"
+    ],
+    "weld_count": 40,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W26",
+      "W27",
+      "W28",
+      "W29",
+      "FFW30",
+      "W31",
+      "W32",
+      "W33",
+      "W34",
+      "W35",
+      "W36",
+      "W37",
+      "W38",
+      "W39",
+      "W40",
+      "W41",
+      "FFW42"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG136-5",
+      "LOOSE",
+      "PG136-3",
+      "LOOSE",
+      "PG136-6",
+      "LOOSE"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 20,
+    "pipe_pieces": [
+      "PG201-1",
+      "PG201-2",
+      "PG201-3",
+      "PG201-4",
+      "PG201-5",
+      "PG201-6"
+    ],
+    "weld_count": 34,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W26",
+      "W27",
+      "W28",
+      "W29",
+      "W30",
+      "W31",
+      "W32",
+      "W33",
+      "W34"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG201-5",
+      "PG201-1",
+      "LOOSE",
+      "PG201-6"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 21,
+    "pipe_pieces": [
+      "PG144-1",
+      "PG144-2"
+    ],
+    "weld_count": 8,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "1. CLAMP 수정"
+    ],
+    "title_block": [
+      "PG144-1"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 22,
+    "pipe_pieces": [
+      "PG141-1"
+    ],
+    "weld_count": 2,
+    "weld_items": [
+      "W1",
+      "W2"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "1. 배관수정",
+      "2. CLAMP수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "250421 : 보류\n250512 :\n1. 배관수정\n2. CLAMP수정"
+    ]
+  },
+  {
+    "page": 23,
+    "pipe_pieces": [
+      "PG134-1"
+    ],
+    "weld_count": 5,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "250512 : CLAMP수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "PIPE CLAMP\n122. 829. 659",
+      "LATERAL\n. 033",
+      "250421 : 보류\n-->250428 도면교체\n250512 : CLAMP수정"
+    ]
+  },
+  {
+    "page": 24,
+    "pipe_pieces": [
+      "PG140-1",
+      "PG140-2",
+      "PG140-3",
+      "PG140-4",
+      "PG140-5"
+    ],
+    "weld_count": 42,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W26",
+      "W27",
+      "W28",
+      "W29",
+      "W30",
+      "W31",
+      "W32",
+      "W33",
+      "W34",
+      "W35",
+      "W36",
+      "W37",
+      "W38",
+      "W39",
+      "W40",
+      "W41",
+      "W42"
+    ],
+    "dimensions_mm": [
+      412,
+      360,
+      482
+    ],
+    "other_dims": [],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관수정",
+      "2. CLAMP수정"
+    ],
+    "title_block": [
+      "LOOSE",
+      "PG140-4",
+      "(Loose)"
+    ],
+    "table_text": [
+      "PIPE CLAMP\n122. 820. 92",
+      "SLIDE\n2. 031",
+      "250421 : 보류\n250512 :\n1. 배관수정\n2. CLAMP수정"
+    ]
+  },
+  {
+    "page": 25,
+    "pipe_pieces": [
+      "PG204-1",
+      "PG204-2",
+      "PG204-3",
+      "PG204-4"
+    ],
+    "weld_count": 27,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W26",
+      "W27"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG204-1",
+      "LOOSE",
+      "PG204-2",
+      "LOOSE"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 26,
+    "pipe_pieces": [
+      "PG135-1",
+      "PG135-2",
+      "PG135-3",
+      "PG135-4",
+      "PG135-5"
+    ],
+    "weld_count": 45,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W28",
+      "W29",
+      "W30",
+      "W31",
+      "W32",
+      "W33",
+      "W34",
+      "W35",
+      "W36",
+      "W37",
+      "W38",
+      "W39",
+      "W40",
+      "W41",
+      "W42",
+      "W43",
+      "W44",
+      "W45",
+      "W46",
+      "W47"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG135-5"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 27,
+    "pipe_pieces": [
+      "PG143-1",
+      "PG143-2",
+      "PG143-3"
+    ],
+    "weld_count": 30,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19",
+      "W20",
+      "W21",
+      "W22",
+      "W23",
+      "W24",
+      "W25",
+      "W26",
+      "W27",
+      "W28",
+      "W29",
+      "W30"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG143-2"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 28,
+    "pipe_pieces": [
+      "PG145-1"
+    ],
+    "weld_count": 13,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [],
+    "table_text": []
+  },
+  {
+    "page": 29,
+    "pipe_pieces": [
+      "PG146-1",
+      "PG146-2"
+    ],
+    "weld_count": 18,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG146-2"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 30,
+    "pipe_pieces": [
+      "PG501-1"
+    ],
+    "weld_count": 6,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [],
+    "table_text": []
+  },
+  {
+    "page": 31,
+    "pipe_pieces": [
+      "PG103-1"
+    ],
+    "weld_count": 5,
+    "weld_items": [
+      "W1",
+      "FFW2",
+      "W3",
+      "FFW4",
+      "W5"
+    ],
+    "dimensions_mm": [
+      218,
+      524
+    ],
+    "other_dims": [
+      "0.8M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "0.8M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  },
+  {
+    "page": 32,
+    "pipe_pieces": [
+      "PG104-1"
+    ],
+    "weld_count": 5,
+    "weld_items": [
+      "W1",
+      "FFW2",
+      "W3",
+      "FFW4",
+      "W5"
+    ],
+    "dimensions_mm": [
+      218,
+      524
+    ],
+    "other_dims": [
+      "0.8M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "0.8M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  },
+  {
+    "page": 33,
+    "pipe_pieces": [
+      "PG105-1"
+    ],
+    "weld_count": 9,
+    "weld_items": [
+      "W1",
+      "FFW2",
+      "W3",
+      "FFW4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9"
+    ],
+    "dimensions_mm": [
+      429,
+      396
+    ],
+    "other_dims": [
+      "0.9M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "0.9M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  },
+  {
+    "page": 34,
+    "pipe_pieces": [
+      "PG106-1"
+    ],
+    "weld_count": 9,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "FFW6",
+      "W7",
+      "FFW8",
+      "W9"
+    ],
+    "dimensions_mm": [
+      429,
+      396
+    ],
+    "other_dims": [
+      "0.9M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "0.9M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  },
+  {
+    "page": 35,
+    "pipe_pieces": [
+      "PG107-1",
+      "PG107-2"
+    ],
+    "weld_count": 15,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG107-2"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 36,
+    "pipe_pieces": [
+      "PG108-1",
+      "PG108-2"
+    ],
+    "weld_count": 18,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "CLAMP 변경"
+    ],
+    "title_block": [],
+    "table_text": []
+  },
+  {
+    "page": 37,
+    "pipe_pieces": [
+      "PG109-1"
+    ],
+    "weld_count": 3,
+    "weld_items": [
+      "W1",
+      "FFW2",
+      "W3"
+    ],
+    "dimensions_mm": [
+      1406
+    ],
+    "other_dims": [
+      "1.5M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "1.5M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  },
+  {
+    "page": 38,
+    "pipe_pieces": [
+      "PG110-1"
+    ],
+    "weld_count": 7,
+    "weld_items": [
+      "W1",
+      "FFW2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7"
+    ],
+    "dimensions_mm": [
+      1406
+    ],
+    "other_dims": [
+      "1.5M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "1.5M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  },
+  {
+    "page": 39,
+    "pipe_pieces": [
+      "PG111-1",
+      "PG111-2"
+    ],
+    "weld_count": 10,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [
+      "PG111-1"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 40,
+    "pipe_pieces": [
+      "PG112-1",
+      "PG112-2"
+    ],
+    "weld_count": 15,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [],
+    "title_block": [],
+    "table_text": []
+  },
+  {
+    "page": 41,
+    "pipe_pieces": [
+      "PG113-1"
+    ],
+    "weld_count": 3,
+    "weld_items": [
+      "FFW1",
+      "W2",
+      "W3"
+    ],
+    "dimensions_mm": [
+      1227
+    ],
+    "other_dims": [
+      "1.3M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "1.3M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  },
+  {
+    "page": 42,
+    "pipe_pieces": [
+      "PG114-1"
+    ],
+    "weld_count": 6,
+    "weld_items": [
+      "FFW1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6"
+    ],
+    "dimensions_mm": [
+      1409
+    ],
+    "other_dims": [
+      "1.5M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "1.5M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  },
+  {
+    "page": 43,
+    "pipe_pieces": [
+      "PG115-1",
+      "PG115-2"
+    ],
+    "weld_count": 19,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18",
+      "W19"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "개정된 부분 알 수 없음"
+    ],
+    "title_block": [],
+    "table_text": []
+  },
+  {
+    "page": 44,
+    "pipe_pieces": [
+      "PG116-1",
+      "PG116-2"
+    ],
+    "weld_count": 16,
+    "weld_items": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8",
+      "W9",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16"
+    ],
+    "dimensions_mm": [],
+    "other_dims": [],
+    "has_loose": false,
+    "revision_notes": [
+      "개정된 부분 알 수 없음"
+    ],
+    "title_block": [
+      "PG116-2"
+    ],
+    "table_text": []
+  },
+  {
+    "page": 45,
+    "pipe_pieces": [
+      "PG117-1"
+    ],
+    "weld_count": 4,
+    "weld_items": [
+      "FFW1",
+      "W2",
+      "W3",
+      "FFW3"
+    ],
+    "dimensions_mm": [
+      1905,
+      473
+    ],
+    "other_dims": [
+      "2.4M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "2.4M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  },
+  {
+    "page": 46,
+    "pipe_pieces": [
+      "PG118-1"
+    ],
+    "weld_count": 8,
+    "weld_items": [
+      "FFW1",
+      "W2",
+      "FFW3",
+      "W4",
+      "W5",
+      "W6",
+      "W7",
+      "W8"
+    ],
+    "dimensions_mm": [
+      1905,
+      206
+    ],
+    "other_dims": [
+      "2.2M"
+    ],
+    "has_loose": true,
+    "revision_notes": [
+      "1. 배관길이변경",
+      "2. W --->FFW수정"
+    ],
+    "title_block": [],
+    "table_text": [
+      "2.2M",
+      "250512 :\n1. 배관길이변경\n2. W --->FFW수정"
+    ]
+  }
+]

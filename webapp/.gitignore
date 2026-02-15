@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+uploads/
+outputs/
+data/
+*.db
+node_modules/
+dist/
+.vite/
+*.log
+.DS_Store
+deploy/container-instance.json
