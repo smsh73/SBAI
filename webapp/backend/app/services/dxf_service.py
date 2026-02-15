@@ -211,9 +211,11 @@ def _force_bw(ax):
         try:
             if isinstance(child, mlines.Line2D):
                 child.set_color('#000000')
-                child.set_linewidth(max(0.15, min(child.get_linewidth(), 0.5)))
+                child.set_linewidth(max(0.07, min(child.get_linewidth(), 0.25)))
             elif isinstance(child, mcoll.LineCollection):
                 child.set_colors(['#000000'])
+                lws = child.get_linewidths()
+                child.set_linewidths([max(0.07, min(lw, 0.25)) for lw in lws])
             elif isinstance(child, (mcoll.PathCollection, mcoll.PatchCollection)):
                 child.set_edgecolors('#000000')
                 child.set_facecolors('none')
@@ -333,8 +335,8 @@ def _collect_unique_segments(lines, polys, min_len_mm=80):
             # 길이 유사성 검사 (70% 이상 유사)
             len_ratio = min(l, bl) / max(l, bl) if max(l, bl) > 0 else 0
 
-            # 가까운 평행 세그먼트 (80mm 이내) + 유사한 길이 → 같은 부재의 양면
-            if perp_dist * DIMLFAC < 80 and len_ratio > 0.7:
+            # 가까운 평행 세그먼트 (400mm 이내) + 유사한 길이 → 같은 부재의 양면
+            if perp_dist * DIMLFAC < 400 and len_ratio > 0.7:
                 used.add(j)
                 group.append((bx1, by1, bx2, by2, bl, bmid))
 
@@ -353,14 +355,27 @@ def _add_segment_parallel_dims(ax, segments, center_x, center_y):
     - 연장선: 세그먼트 끝점에서 외곽 방향으로 수직
     - 치수선: 세그먼트와 평행, 외곽 오프셋
     - 텍스트: 세그먼트 방향으로 회전, 가독성 확보
+    - 충돌 감지: 텍스트가 겹치지 않도록 최소 거리 검사
     """
     artists = []
+    placed_texts = []  # (x, y) 이미 배치된 텍스트 중심점
     DIM_C = '#555555'
-    EXT_LW = 0.2
-    DIM_LW = 0.3
+    EXT_LW = 0.15
+    DIM_LW = 0.2
     FS = 5.5
 
-    for x1, y1, x2, y2, length_mm in segments:
+    # 밀도 기반 충돌 거리 조정 + 긴 세그먼트 우선 배치
+    if len(segments) > 30:
+        MIN_TEXT_DIST = 4.0
+    elif len(segments) > 15:
+        MIN_TEXT_DIST = 2.8
+    else:
+        MIN_TEXT_DIST = 1.8
+    SAME_VAL_MULT = 2.5  # 같은 수치값이면 더 먼 거리 요구
+
+    segments_sorted = sorted(segments, key=lambda s: s[4], reverse=True)
+
+    for x1, y1, x2, y2, length_mm in segments_sorted:
         dx = x2 - x1
         dy = y2 - y1
         seg_len = (dx**2 + dy**2)**0.5
@@ -386,6 +401,28 @@ def _add_segment_parallel_dims(ax, segments, center_x, center_y):
         # 오프셋 거리 (도형에서 충분히 떨어지도록)
         offset = max(seg_len * 0.12, 2.0)
         offset = min(offset, 6.0)
+
+        # 텍스트 위치 사전 계산 (충돌 검사용)
+        dim_x1 = x1 + perp_x * offset
+        dim_y1 = y1 + perp_y * offset
+        dim_x2 = x2 + perp_x * offset
+        dim_y2 = y2 + perp_y * offset
+        text_x = (dim_x1 + dim_x2) / 2 + perp_x * offset * 0.3
+        text_y = (dim_y1 + dim_y2) / 2 + perp_y * offset * 0.3
+
+        # 충돌 감지: 이미 배치된 텍스트와 너무 가까우면 건너뜀
+        # 같은 수치값이면 더 먼 거리 요구 (양면 중복 방지)
+        too_close = False
+        for px, py, pval in placed_texts:
+            dist = ((text_x - px)**2 + (text_y - py)**2)**0.5
+            check_dist = MIN_TEXT_DIST * SAME_VAL_MULT if abs(pval - length_mm) < 1 else MIN_TEXT_DIST
+            if dist < check_dist:
+                too_close = True
+                break
+        if too_close:
+            continue
+        placed_texts.append((text_x, text_y, length_mm))
+
         ext_len = offset * 1.2
 
         # 연장선 1 (끝점 1에서 외곽 방향)
@@ -401,11 +438,6 @@ def _add_segment_parallel_dims(ax, segments, center_x, center_y):
         artists.append(a[0])
 
         # 치수선 (세그먼트와 평행, 오프셋 위치)
-        dim_x1 = x1 + perp_x * offset
-        dim_y1 = y1 + perp_y * offset
-        dim_x2 = x2 + perp_x * offset
-        dim_y2 = y2 + perp_y * offset
-
         a = ax.annotate('', xy=(dim_x2, dim_y2), xytext=(dim_x1, dim_y1),
                         arrowprops=dict(arrowstyle='<->', color=DIM_C, lw=DIM_LW))
         artists.append(a)
@@ -416,10 +448,6 @@ def _add_segment_parallel_dims(ax, segments, center_x, center_y):
             text_angle -= 180
         elif text_angle < -90:
             text_angle += 180
-
-        # 텍스트 위치 (치수선 바깥쪽으로 더 띄움)
-        text_x = (dim_x1 + dim_x2) / 2 + perp_x * offset * 0.3
-        text_y = (dim_y1 + dim_y2) / 2 + perp_y * offset * 0.3
 
         a = ax.text(text_x, text_y, f'{length_mm:.0f}',
                     ha='center', va='center',
@@ -449,7 +477,7 @@ def _add_overall_dims(ax, segments):
     h = ymax - ymin
 
     OVR_C = '#CC0000'
-    EXT_LW = 0.2
+    EXT_LW = 0.15
     FS = 6.5
 
     # 하단: 전체 폭
@@ -460,7 +488,7 @@ def _add_overall_dims(ax, segments):
             artists.append(ax.plot([x, x], [ymin, y_dim - step * 0.3],
                                    color=OVR_C, lw=EXT_LW, alpha=0.4)[0])
         artists.append(ax.annotate('', xy=(xmax, y_dim), xytext=(xmin, y_dim),
-                                   arrowprops=dict(arrowstyle='<->', color=OVR_C, lw=0.5)))
+                                   arrowprops=dict(arrowstyle='<->', color=OVR_C, lw=0.35)))
         artists.append(ax.text((xmin + xmax) / 2, y_dim - step * 0.35, f'{w * DIMLFAC:.0f}',
                                ha='center', va='top', fontsize=FS, color=OVR_C, fontweight='bold',
                                bbox=dict(boxstyle='round,pad=0.1', fc='white', ec=OVR_C, lw=0.3, alpha=0.95)))
@@ -473,7 +501,7 @@ def _add_overall_dims(ax, segments):
             artists.append(ax.plot([xmax, x_dim + step * 0.3], [y, y],
                                    color=OVR_C, lw=EXT_LW, alpha=0.4)[0])
         artists.append(ax.annotate('', xy=(x_dim, ymax), xytext=(x_dim, ymin),
-                                   arrowprops=dict(arrowstyle='<->', color=OVR_C, lw=0.5)))
+                                   arrowprops=dict(arrowstyle='<->', color=OVR_C, lw=0.35)))
         artists.append(ax.text(x_dim + step * 0.35, (ymin + ymax) / 2, f'{h * DIMLFAC:.0f}',
                                ha='left', va='center', fontsize=FS, color=OVR_C, fontweight='bold',
                                rotation=90,
