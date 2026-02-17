@@ -119,7 +119,7 @@ create_container_instance() {
 
     RESULT=$(oci container-instances container-instance create \
         --from-json "file://${CI_JSON}" \
-        --wait-for-state ACTIVE \
+        --wait-for-state SUCCEEDED \
         --wait-interval-seconds 30 \
         --max-wait-seconds 600 2>&1) || true
 
