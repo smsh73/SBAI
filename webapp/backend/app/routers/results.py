@@ -86,6 +86,69 @@ async def get_results(session_id: str):
             "pages": bom_data,
         }
 
+    # VLM BOM 분석 결과 미리보기
+    vlm_path = session_dir / "vlm_bom_data.json"
+    if vlm_path.exists():
+        with open(vlm_path) as f:
+            vlm_data = json.load(f)
+        total_vlm_pipes = sum(len(pd.get("pipe_pieces", [])) for pd in vlm_data)
+        total_vlm_components = sum(len(pd.get("components", [])) for pd in vlm_data)
+        total_vlm_welds = sum(len(pd.get("weld_points", [])) for pd in vlm_data)
+        total_bom_items = sum(len(pd.get("bom_table", [])) for pd in vlm_data)
+        total_vlm_dims = sum(len(pd.get("dimensions_mm", [])) for pd in vlm_data)
+        total_cut_lengths = sum(len(pd.get("cut_lengths", [])) for pd in vlm_data)
+
+        # 밸브/피팅 집계
+        valve_summary = {}
+        fitting_summary = {}
+        line_nos = set()
+        for pd in vlm_data:
+            if pd.get("line_no"):
+                line_nos.add(str(pd["line_no"]))
+            for comp in pd.get("components", []):
+                ctype = comp.get("type", "")
+                subtype = comp.get("subtype", "unknown")
+                qty = comp.get("quantity", 1)
+                if ctype == "valve":
+                    valve_summary[subtype] = valve_summary.get(subtype, 0) + qty
+                elif ctype == "fitting":
+                    fitting_summary[subtype] = fitting_summary.get(subtype, 0) + qty
+
+        preview["vlm_bom"] = {
+            "total_pages": len(vlm_data),
+            "total_pipe_pieces": total_vlm_pipes,
+            "total_components": total_vlm_components,
+            "total_weld_points": total_vlm_welds,
+            "total_bom_items": total_bom_items,
+            "total_dimensions": total_vlm_dims,
+            "total_cut_lengths": total_cut_lengths,
+            "valve_summary": valve_summary,
+            "fitting_summary": fitting_summary,
+            "unique_line_nos": sorted(line_nos),
+            "pages": vlm_data,
+        }
+
+    # 심볼 레전드 데이터
+    symbols_path = session_dir / "symbols_legend.json"
+    if symbols_path.exists():
+        with open(symbols_path) as f:
+            symbols = json.load(f)
+        by_cat = {}
+        for s in symbols:
+            cat = s.get("category", "OTHER")
+            by_cat[cat] = by_cat.get(cat, 0) + 1
+        preview["symbols"] = {
+            "total": len(symbols),
+            "by_category": by_cat,
+            "sample": symbols[:10],
+        }
+
+    # VLM 추출 통계
+    stats_path = session_dir / "vlm_extraction_stats.json"
+    if stats_path.exists():
+        with open(stats_path) as f:
+            preview["vlm_stats"] = json.load(f)
+
     return {
         "session_id": session_id,
         "status": session.get("status", "unknown"),

@@ -26,3 +26,14 @@ pid_page*.png
 bom_page*.png
 pipe_bom_raw.json
 bom_regions/
+
+# VLM 분석 출력/테스트 데이터
+full_vlm_output/
+test_vlm_output/
+test_vlm_output_v2/
+test_symbols_output/
+result_2d/
+result_2d_test/
+vlm_analysis/
+*.png
+!webapp/frontend/public/*.png

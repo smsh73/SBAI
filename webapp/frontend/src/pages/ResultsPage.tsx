@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Download, Image, FileSpreadsheet, X, ZoomIn,
-  ChevronLeft, ChevronRight, RefreshCw, Package, Wrench
+  ChevronLeft, ChevronRight, RefreshCw, Package, Wrench,
+  Eye, Layers, Activity
 } from "lucide-react";
 
 const API = "/api";
@@ -17,6 +18,55 @@ interface BomPage {
   dimensions_mm: number[];
   has_loose: boolean;
   is_cover?: boolean;
+}
+
+interface VlmBomItem {
+  letter_code?: string;
+  item_no?: string;
+  quantity?: string | number;
+  size_inches?: string;
+  description?: string;
+  material_spec?: string;
+  weight_kg?: number;
+  remarks?: string;
+}
+
+interface VlmPageData {
+  page: number;
+  drawing_number?: string;
+  line_no?: string;
+  pipe_no?: string;
+  line_description?: string;
+  pipe_group?: string;
+  pipe_pieces?: any[];
+  components?: any[];
+  weld_points?: any[];
+  dimensions_mm?: any[];
+  bom_table?: VlmBomItem[];
+  cut_lengths?: { cut_no: number; length_mm: number }[];
+  total_weld_count?: number;
+  shop_weld_count?: number;
+  field_weld_count?: number;
+  has_loose_parts?: boolean;
+  drawing_analysis_ok?: boolean;
+  table_analysis_ok?: boolean;
+  confidence?: number;
+  drawing_info?: any;
+  bom_totals?: any;
+}
+
+interface VlmBomPreview {
+  total_pages: number;
+  total_pipe_pieces: number;
+  total_components: number;
+  total_weld_points: number;
+  total_bom_items: number;
+  total_dimensions: number;
+  total_cut_lengths: number;
+  valve_summary: Record<string, number>;
+  fitting_summary: Record<string, number>;
+  unique_line_nos?: string[];
+  pages: VlmPageData[];
 }
 
 interface SessionResult {
@@ -40,11 +90,15 @@ interface SessionResult {
       loose_count: number;
       pages: BomPage[];
     };
+    vlm_bom?: VlmBomPreview;
+    symbols?: { total: number; by_category: Record<string, number>; sample: any[] };
+    vlm_stats?: any;
   };
 }
 
 const IMG_PAGE_SIZE = 12;
 const BOM_PAGE_SIZE = 20;
+const VLM_PAGE_SIZE = 10;
 
 export default function ResultsPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -56,6 +110,9 @@ export default function ResultsPage() {
   const [inputSession, setInputSession] = useState(sessionId || "");
   const [imgPage, setImgPage] = useState(0);
   const [bomPage, setBomPage] = useState(0);
+  const [vlmPage, setVlmPage] = useState(0);
+  const [expandedVlmPage, setExpandedVlmPage] = useState<number | null>(null);
+  const [vlmTab, setVlmTab] = useState<"bom" | "drawing" | "index">("index");
 
   const loadResults = useCallback(async (sid: string) => {
     setLoading(true);
@@ -77,7 +134,7 @@ export default function ResultsPage() {
   }, [sessionId, loadResults]);
 
   useEffect(() => {
-    if (data?.status === "processing" && sessionId) {
+    if ((data?.status === "processing" || data?.status === "vlm_analyzing") && sessionId) {
       const timer = setInterval(() => loadResults(sessionId), 3000);
       return () => clearInterval(timer);
     }
@@ -118,14 +175,14 @@ export default function ResultsPage() {
     );
   }
 
-  // 이미지 페이지네이션 계산
   const totalImgPages = data ? Math.ceil(data.images.length / IMG_PAGE_SIZE) : 0;
   const visibleImages = data ? data.images.slice(imgPage * IMG_PAGE_SIZE, (imgPage + 1) * IMG_PAGE_SIZE) : [];
-
-  // BOM 페이지네이션 계산
   const bomData = data?.preview.pipe_bom?.pages || [];
   const totalBomPages = Math.ceil(bomData.length / BOM_PAGE_SIZE);
   const visibleBom = bomData.slice(bomPage * BOM_PAGE_SIZE, (bomPage + 1) * BOM_PAGE_SIZE);
+  const vlmData = data?.preview.vlm_bom?.pages || [];
+  const totalVlmPages = Math.ceil(vlmData.length / VLM_PAGE_SIZE);
+  const visibleVlm = vlmData.slice(vlmPage * VLM_PAGE_SIZE, (vlmPage + 1) * VLM_PAGE_SIZE);
 
   return (
     <div>
@@ -137,13 +194,16 @@ export default function ResultsPage() {
           <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--navy)" }}>
             {data?.file_name || "로딩 중..."}
           </h2>
-          <p style={{ fontSize: 13, color: "var(--gray-500)" }}>
-            세션: {sessionId}
-          </p>
+          <p style={{ fontSize: 13, color: "var(--gray-500)" }}>세션: {sessionId}</p>
         </div>
         {data && (
-          <span className={`badge badge-${data.status === "completed" ? "completed" : data.status.startsWith("error") ? "error" : "processing"}`}>
-            {data.status === "completed" ? "완료" : data.status.startsWith("error") ? "오류" : "처리 중"}
+          <span className={`badge badge-${
+            data.status === "completed" ? "completed" :
+            data.status.startsWith("error") ? "error" : "processing"
+          }`}>
+            {data.status === "completed" ? "완료" :
+             data.status === "vlm_analyzing" ? "VLM 분석 중..." :
+             data.status.startsWith("error") ? "오류" : "처리 중"}
           </span>
         )}
         <button className="btn btn-outline" onClick={() => loadResults(sessionId)}>
@@ -163,12 +223,50 @@ export default function ResultsPage() {
         </div>
       )}
 
-      {data && data.status === "completed" && (
+      {data?.status === "vlm_analyzing" && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
+            <div className="spinner" />
+            <p style={{ marginTop: 16, color: "var(--gold)" }}>VLM(Vision Language Model)으로 도면을 정밀 분석하고 있습니다...</p>
+            <p style={{ fontSize: 13, color: "var(--gray-500)" }}>페이지당 약 30-40초 소요됩니다</p>
+          </div>
+        </div>
+      )}
+
+      {data && (data.status === "completed" || data.preview.vlm_bom) && (
         <>
-          {/* 통계 요약 */}
-          {(data.preview.valves || data.preview.pipe_bom || data.preview.dimensions) && (
+          {/* 통계 요약 카드 */}
+          {(data.preview.valves || data.preview.pipe_bom || data.preview.vlm_bom || data.preview.dimensions) && (
             <div className="stats-grid" style={{ marginBottom: 24 }}>
-              {data.preview.valves && (
+              {data.preview.vlm_bom && (
+                <>
+                  <div className="stat-card" style={{ borderLeft: "4px solid var(--navy)" }}>
+                    <div className="value">{data.preview.vlm_bom.total_pages}</div>
+                    <div className="label">VLM 분석 페이지</div>
+                  </div>
+                  <div className="stat-card" style={{ borderLeft: "4px solid var(--gold)" }}>
+                    <div className="value">{data.preview.vlm_bom.total_bom_items}</div>
+                    <div className="label">BOM 품목</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="value">{data.preview.vlm_bom.total_pipe_pieces}</div>
+                    <div className="label">파이프 피스</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="value">{data.preview.vlm_bom.total_weld_points}</div>
+                    <div className="label">용접 포인트</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="value">{data.preview.vlm_bom.total_cut_lengths || 0}</div>
+                    <div className="label">Cut Lengths</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="value">{data.preview.vlm_bom.total_components}</div>
+                    <div className="label">컴포넌트</div>
+                  </div>
+                </>
+              )}
+              {data.preview.valves && !data.preview.vlm_bom && (
                 <>
                   <div className="stat-card">
                     <div className="value">{data.preview.valves.total}</div>
@@ -180,15 +278,11 @@ export default function ResultsPage() {
                   </div>
                 </>
               )}
-              {data.preview.pipe_bom && (
+              {data.preview.pipe_bom && !data.preview.vlm_bom && (
                 <>
                   <div className="stat-card">
                     <div className="value">{data.preview.pipe_bom.total_pages}</div>
                     <div className="label">전체 페이지</div>
-                  </div>
-                  <div className="stat-card">
-                    <div className="value">{data.preview.pipe_bom.content_pages}</div>
-                    <div className="label">내용 페이지</div>
                   </div>
                   <div className="stat-card">
                     <div className="value">{data.preview.pipe_bom.total_pieces}</div>
@@ -198,18 +292,6 @@ export default function ResultsPage() {
                     <div className="value">{data.preview.pipe_bom.total_welds}</div>
                     <div className="label">용접 항목</div>
                   </div>
-                  {data.preview.pipe_bom.total_length_mm > 0 && (
-                    <div className="stat-card">
-                      <div className="value">{(data.preview.pipe_bom.total_length_mm / 1000).toFixed(1)}m</div>
-                      <div className="label">총 파이프 길이</div>
-                    </div>
-                  )}
-                  {data.preview.pipe_bom.loose_count > 0 && (
-                    <div className="stat-card">
-                      <div className="value">{data.preview.pipe_bom.loose_count}</div>
-                      <div className="label">LOOSE 파트</div>
-                    </div>
-                  )}
                 </>
               )}
               {data.preview.dimensions && (
@@ -221,7 +303,277 @@ export default function ResultsPage() {
             </div>
           )}
 
-          {/* 이미지 미리보기 (페이지네이션) */}
+          {/* VLM BOM 분석 결과 */}
+          {data.preview.vlm_bom && vlmData.length > 0 && (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <div className="card-header">
+                <h3><Eye size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />VLM PIPE BOM 분석 결과</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {/* 탭 버튼 */}
+                  <div style={{ display: "flex", gap: 2 }}>
+                    {(["index", "bom", "drawing"] as const).map(tab => (
+                      <button
+                        key={tab}
+                        className={`btn ${vlmTab === tab ? "btn-primary" : "btn-outline"}`}
+                        style={{ padding: "4px 10px", fontSize: 12 }}
+                        onClick={() => setVlmTab(tab)}
+                      >
+                        {tab === "index" ? "도면 인덱스" : tab === "bom" ? "BOM 상세" : "도면 분석"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="card-body">
+
+                {/* 인덱스 탭 */}
+                {vlmTab === "index" && (
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="data-table" style={{ fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          <th>Page</th>
+                          <th>Drawing No.</th>
+                          <th>Line No.</th>
+                          <th>Pipe No.</th>
+                          <th>Line Description</th>
+                          <th>Pieces</th>
+                          <th>Welds</th>
+                          <th>BOM</th>
+                          <th>Cuts</th>
+                          <th style={{ textAlign: "center" }}>Draw</th>
+                          <th style={{ textAlign: "center" }}>Table</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {vlmData.map((pd: VlmPageData) => {
+                          const di = pd.drawing_info || {};
+                          return (
+                            <tr key={pd.page}>
+                              <td style={{ fontWeight: 600 }}>{pd.page}</td>
+                              <td>{pd.drawing_number || di.drawing_number || ""}</td>
+                              <td>{pd.line_no || di.line_no || ""}</td>
+                              <td>{pd.pipe_no || di.pipe_no || ""}</td>
+                              <td style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {pd.line_description || di.line_description || ""}
+                              </td>
+                              <td>{(pd.pipe_pieces || []).length || "-"}</td>
+                              <td>{(pd.weld_points || []).length || "-"}</td>
+                              <td>{(pd.bom_table || []).length || "-"}</td>
+                              <td>{(pd.cut_lengths || []).length || "-"}</td>
+                              <td style={{ textAlign: "center" }}>
+                                {pd.drawing_analysis_ok ?
+                                  <span style={{ color: "#16a34a" }}>OK</span> :
+                                  <span style={{ color: "#dc2626" }}>-</span>}
+                              </td>
+                              <td style={{ textAlign: "center" }}>
+                                {pd.table_analysis_ok ?
+                                  <span style={{ color: "#16a34a" }}>OK</span> :
+                                  <span style={{ color: "#dc2626" }}>-</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* BOM 상세 탭 */}
+                {vlmTab === "bom" && (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, color: "var(--gray-500)" }}>
+                        {vlmData.length}개 페이지, {data.preview.vlm_bom.total_bom_items}개 BOM 품목
+                      </span>
+                      {totalVlmPages > 1 && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto" }}>
+                          <button className="btn btn-outline" style={{ padding: "4px 8px" }}
+                            disabled={vlmPage === 0} onClick={() => setVlmPage(p => p - 1)}>
+                            <ChevronLeft size={14} />
+                          </button>
+                          <span style={{ fontSize: 12, color: "var(--gray-500)", minWidth: 60, textAlign: "center" }}>
+                            {vlmPage + 1} / {totalVlmPages}
+                          </span>
+                          <button className="btn btn-outline" style={{ padding: "4px 8px" }}
+                            disabled={vlmPage >= totalVlmPages - 1} onClick={() => setVlmPage(p => p + 1)}>
+                            <ChevronRight size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {visibleVlm.map((pd: VlmPageData) => (
+                      <div key={pd.page} style={{ marginBottom: 16 }}>
+                        <div
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "8px 12px", background: "var(--gray-100)", borderRadius: 6,
+                            cursor: "pointer"
+                          }}
+                          onClick={() => setExpandedVlmPage(expandedVlmPage === pd.page ? null : pd.page)}
+                        >
+                          <span style={{ fontWeight: 700, color: "var(--navy)" }}>Page {pd.page}</span>
+                          <span style={{ fontSize: 12, color: "var(--gray-500)" }}>
+                            {pd.drawing_number || ""} | Line {pd.line_no || "?"} | {pd.line_description || ""}
+                          </span>
+                          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--gray-500)" }}>
+                            BOM: {(pd.bom_table || []).length} | Cuts: {(pd.cut_lengths || []).length} | Welds: {(pd.weld_points || []).length}
+                          </span>
+                          <ChevronRight size={14} style={{
+                            transform: expandedVlmPage === pd.page ? "rotate(90deg)" : "none",
+                            transition: "transform 0.2s"
+                          }} />
+                        </div>
+
+                        {expandedVlmPage === pd.page && (
+                          <div style={{ padding: "12px 0" }}>
+                            {/* BOM Table */}
+                            {(pd.bom_table || []).length > 0 && (
+                              <div style={{ overflowX: "auto", marginBottom: 12 }}>
+                                <h4 style={{ fontSize: 13, color: "var(--navy)", marginBottom: 6 }}>BOM Items</h4>
+                                <table className="data-table" style={{ fontSize: 11 }}>
+                                  <thead>
+                                    <tr>
+                                      <th>Code</th><th>Qty</th><th>Size</th>
+                                      <th>Description</th><th>Material Spec</th>
+                                      <th>Weight</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(pd.bom_table || []).map((item, i) => (
+                                      <tr key={i}>
+                                        <td style={{ fontWeight: 600, color: "var(--navy)" }}>
+                                          {item.letter_code || item.item_no || ""}
+                                        </td>
+                                        <td>{item.quantity || ""}</td>
+                                        <td>{item.size_inches || ""}</td>
+                                        <td style={{ maxWidth: 250 }}>{item.description || ""}</td>
+                                        <td style={{ maxWidth: 200, fontSize: 10 }}>{item.material_spec || ""}</td>
+                                        <td>{item.weight_kg || ""}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+
+                            {/* Cut Lengths */}
+                            {(pd.cut_lengths || []).length > 0 && (
+                              <div style={{ marginBottom: 12 }}>
+                                <h4 style={{ fontSize: 13, color: "var(--navy)", marginBottom: 6 }}>Cut Lengths</h4>
+                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                  {(pd.cut_lengths || []).map((cut, i) => (
+                                    <span key={i} style={{
+                                      padding: "3px 10px", background: "#f0f9ff", border: "1px solid #bae6fd",
+                                      borderRadius: 4, fontSize: 12
+                                    }}>
+                                      {"<"}{cut.cut_no}{">"} {cut.length_mm} mm
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Pipe Pieces */}
+                            {(pd.pipe_pieces || []).length > 0 && (
+                              <div style={{ marginBottom: 8 }}>
+                                <h4 style={{ fontSize: 13, color: "var(--navy)", marginBottom: 6 }}>Pipe Pieces</h4>
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                  {(pd.pipe_pieces || []).map((pp: any, i: number) => (
+                                    <span key={i} style={{
+                                      padding: "3px 10px", background: "#f0fdf4", border: "1px solid #bbf7d0",
+                                      borderRadius: 4, fontSize: 12
+                                    }}>
+                                      {typeof pp === "string" ? pp : pp.id || JSON.stringify(pp)}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* 도면 분석 탭 */}
+                {vlmTab === "drawing" && (
+                  <>
+                    {/* 밸브/피팅 요약 */}
+                    <div style={{ display: "flex", gap: 24, marginBottom: 16, flexWrap: "wrap" }}>
+                      {data.preview.vlm_bom.valve_summary && Object.keys(data.preview.vlm_bom.valve_summary).length > 0 && (
+                        <div>
+                          <h4 style={{ fontSize: 14, color: "var(--navy)", marginBottom: 8 }}>밸브 종류</h4>
+                          {Object.entries(data.preview.vlm_bom.valve_summary).map(([type, count]) => (
+                            <div key={type} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", gap: 16 }}>
+                              <span>{type}</span><strong>{count}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {data.preview.vlm_bom.fitting_summary && Object.keys(data.preview.vlm_bom.fitting_summary).length > 0 && (
+                        <div>
+                          <h4 style={{ fontSize: 14, color: "var(--navy)", marginBottom: 8 }}>피팅 종류</h4>
+                          {Object.entries(data.preview.vlm_bom.fitting_summary).map(([type, count]) => (
+                            <div key={type} style={{ fontSize: 13, display: "flex", justifyContent: "space-between", gap: 16 }}>
+                              <span>{type}</span><strong>{count}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {data.preview.vlm_bom.unique_line_nos && data.preview.vlm_bom.unique_line_nos.length > 0 && (
+                        <div>
+                          <h4 style={{ fontSize: 14, color: "var(--navy)", marginBottom: 8 }}>라인 번호 ({data.preview.vlm_bom.unique_line_nos.length}개)</h4>
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                            {data.preview.vlm_bom.unique_line_nos.map(ln => (
+                              <span key={ln} style={{
+                                padding: "2px 8px", background: "#fef3c7", border: "1px solid #fde68a",
+                                borderRadius: 4, fontSize: 12
+                              }}>{ln}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 컴포넌트 상세 테이블 */}
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th>Page</th><th>Type</th><th>Sub-type</th>
+                            <th>Size</th><th>Description</th><th>Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vlmData.flatMap((pd: VlmPageData) =>
+                            (pd.components || []).map((c: any, i: number) => (
+                              <tr key={`${pd.page}-${i}`}>
+                                <td>{pd.page}</td>
+                                <td style={{
+                                  fontWeight: 600,
+                                  color: c.type === "valve" ? "#dc2626" :
+                                         c.type === "fitting" ? "#2563eb" : "var(--navy)"
+                                }}>{(c.type || "").toUpperCase()}</td>
+                                <td>{c.subtype || ""}</td>
+                                <td>{c.size || ""}</td>
+                                <td>{c.description || ""}</td>
+                                <td>{c.quantity || 1}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 이미지 미리보기 */}
           {data.images.length > 0 && (
             <div className="card" style={{ marginBottom: 24 }}>
               <div className="card-header">
@@ -230,23 +582,15 @@ export default function ResultsPage() {
                   <span style={{ fontSize: 13, color: "var(--gray-500)" }}>{data.images.length}개 파일</span>
                   {totalImgPages > 1 && (
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <button
-                        className="btn btn-outline"
-                        style={{ padding: "4px 8px" }}
-                        disabled={imgPage === 0}
-                        onClick={() => setImgPage(p => p - 1)}
-                      >
+                      <button className="btn btn-outline" style={{ padding: "4px 8px" }}
+                        disabled={imgPage === 0} onClick={() => setImgPage(p => p - 1)}>
                         <ChevronLeft size={14} />
                       </button>
                       <span style={{ fontSize: 12, color: "var(--gray-500)", minWidth: 60, textAlign: "center" }}>
                         {imgPage + 1} / {totalImgPages}
                       </span>
-                      <button
-                        className="btn btn-outline"
-                        style={{ padding: "4px 8px" }}
-                        disabled={imgPage >= totalImgPages - 1}
-                        onClick={() => setImgPage(p => p + 1)}
-                      >
+                      <button className="btn btn-outline" style={{ padding: "4px 8px" }}
+                        disabled={imgPage >= totalImgPages - 1} onClick={() => setImgPage(p => p + 1)}>
                         <ChevronRight size={14} />
                       </button>
                     </div>
@@ -298,9 +642,7 @@ export default function ResultsPage() {
                   <div style={{ overflowX: "auto" }}>
                     <table className="data-table">
                       <thead>
-                        <tr>
-                          <th>TAG</th><th>TYPE</th><th>SIZE</th><th>FLUID</th><th>LOCATION</th><th>SHEET</th>
-                        </tr>
+                        <tr><th>TAG</th><th>TYPE</th><th>SIZE</th><th>FLUID</th><th>LOCATION</th><th>SHEET</th></tr>
                       </thead>
                       <tbody>
                         {data.preview.valves.sample.map((v: any) => (
@@ -317,8 +659,8 @@ export default function ResultsPage() {
             </div>
           )}
 
-          {/* BOM 전체 데이터 테이블 (페이지네이션) */}
-          {data.preview.pipe_bom && bomData.length > 0 && (
+          {/* BOM 전체 데이터 테이블 (기존) */}
+          {data.preview.pipe_bom && bomData.length > 0 && !data.preview.vlm_bom && (
             <div className="card" style={{ marginBottom: 24 }}>
               <div className="card-header">
                 <h3><Package size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />PIPE BOM 데이터</h3>
@@ -326,23 +668,15 @@ export default function ResultsPage() {
                   <span style={{ fontSize: 13, color: "var(--gray-500)" }}>{bomData.length}개 페이지</span>
                   {totalBomPages > 1 && (
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <button
-                        className="btn btn-outline"
-                        style={{ padding: "4px 8px" }}
-                        disabled={bomPage === 0}
-                        onClick={() => setBomPage(p => p - 1)}
-                      >
+                      <button className="btn btn-outline" style={{ padding: "4px 8px" }}
+                        disabled={bomPage === 0} onClick={() => setBomPage(p => p - 1)}>
                         <ChevronLeft size={14} />
                       </button>
                       <span style={{ fontSize: 12, color: "var(--gray-500)", minWidth: 60, textAlign: "center" }}>
                         {bomPage + 1} / {totalBomPages}
                       </span>
-                      <button
-                        className="btn btn-outline"
-                        style={{ padding: "4px 8px" }}
-                        disabled={bomPage >= totalBomPages - 1}
-                        onClick={() => setBomPage(p => p + 1)}
-                      >
+                      <button className="btn btn-outline" style={{ padding: "4px 8px" }}
+                        disabled={bomPage >= totalBomPages - 1} onClick={() => setBomPage(p => p + 1)}>
                         <ChevronRight size={14} />
                       </button>
                     </div>
@@ -354,13 +688,8 @@ export default function ResultsPage() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>Page</th>
-                        <th>Pipe Pieces</th>
-                        <th>피스 수</th>
-                        <th>Welds</th>
-                        <th>용접 항목</th>
-                        <th>치수 (mm)</th>
-                        <th>Loose</th>
+                        <th>Page</th><th>Pipe Pieces</th><th>피스 수</th>
+                        <th>Welds</th><th>용접 항목</th><th>치수 (mm)</th><th>Loose</th>
                       </tr>
                     </thead>
                     <tbody>

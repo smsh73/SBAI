@@ -8,7 +8,7 @@ set -euo pipefail
 
 REGION="${OCI_REGION:-ap-chuncheon-1}"
 NAMESPACE="${OCI_NAMESPACE:-axz2nubbzory}"
-COMPARTMENT_ID="${OCI_COMPARTMENT_ID:-ocid1.tenancy.oc1..aaaaaaaaqqvkziyie25od72fkzlr2nscaeczaqpvpkcsmbmzlnlke3ljspxq}"
+COMPARTMENT_ID="${OCI_COMPARTMENT_ID:-ocid1.compartment.oc1..aaaaaaaa3275p27ivkt2u722n64degacykpzkgbm3evcjto6jkm3rh3vppeq}"
 SUBNET_ID="${OCI_SUBNET_ID:-ocid1.subnet.oc1.ap-chuncheon-1.aaaaaaaanivd55ra4jfhrywi3qnajqc2iw67gugele6yqtfdhtz22n3yvmja}"
 AD="${OCI_AD:-AvAs:AP-CHUNCHEON-1-AD-1}"
 

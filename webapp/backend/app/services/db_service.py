@@ -53,10 +53,40 @@ CREATE TABLE IF NOT EXISTS dimensions (
     data_json TEXT
 );
 
+CREATE TABLE IF NOT EXISTS symbols (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT REFERENCES sessions(id),
+    category TEXT,
+    symbol_name TEXT,
+    description TEXT,
+    image_path TEXT,
+    bbox TEXT,
+    data_json TEXT
+);
+
+CREATE TABLE IF NOT EXISTS vlm_bom (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT REFERENCES sessions(id),
+    page INTEGER,
+    drawing_number TEXT,
+    pipe_group TEXT,
+    pipe_pieces TEXT,
+    components TEXT,
+    weld_points TEXT,
+    dimensions_mm TEXT,
+    bom_table TEXT,
+    total_weld_count INTEGER DEFAULT 0,
+    confidence REAL DEFAULT 0,
+    data_json TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_valves_session ON valves(session_id);
 CREATE INDEX IF NOT EXISTS idx_valves_tag ON valves(tag);
 CREATE INDEX IF NOT EXISTS idx_valves_type ON valves(valve_type);
 CREATE INDEX IF NOT EXISTS idx_bom_session ON pipe_bom(session_id);
+CREATE INDEX IF NOT EXISTS idx_symbols_session ON symbols(session_id);
+CREATE INDEX IF NOT EXISTS idx_symbols_category ON symbols(category);
+CREATE INDEX IF NOT EXISTS idx_vlm_bom_session ON vlm_bom(session_id);
 """
 
 
@@ -130,6 +160,60 @@ async def save_dimensions(session_id: str, dimensions: dict):
                  json.dumps(view_data, ensure_ascii=False))
             )
         await db.commit()
+
+
+async def save_symbols(session_id: str, symbols: list[dict]):
+    """P&ID 심볼 레전드 DB 저장"""
+    async with aiosqlite.connect(str(SQLITE_DB_PATH)) as db:
+        for s in symbols:
+            await db.execute(
+                """INSERT INTO symbols (session_id, category, symbol_name, description,
+                   image_path, bbox, data_json) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (session_id, s.get("category", ""), s.get("symbol_name", ""),
+                 s.get("description", ""), s.get("image_path", ""),
+                 json.dumps(s.get("bbox", [])),
+                 json.dumps(s, ensure_ascii=False))
+            )
+        await db.commit()
+    logger.info(f"Saved {len(symbols)} symbols for session {session_id}")
+
+
+async def save_vlm_bom(session_id: str, pages_data: list[dict]):
+    """VLM 추출 BOM 데이터 DB 저장"""
+    async with aiosqlite.connect(str(SQLITE_DB_PATH)) as db:
+        for pd in pages_data:
+            await db.execute(
+                """INSERT INTO vlm_bom (session_id, page, drawing_number, pipe_group,
+                   pipe_pieces, components, weld_points, dimensions_mm, bom_table,
+                   total_weld_count, confidence, data_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (session_id, pd.get("page", 0),
+                 pd.get("drawing_number", ""),
+                 pd.get("pipe_group", ""),
+                 json.dumps(pd.get("pipe_pieces", []), ensure_ascii=False),
+                 json.dumps(pd.get("components", []), ensure_ascii=False),
+                 json.dumps(pd.get("weld_points", []), ensure_ascii=False),
+                 json.dumps(pd.get("dimensions_mm", []), ensure_ascii=False),
+                 json.dumps(pd.get("bom_table", []), ensure_ascii=False),
+                 pd.get("total_weld_count", 0),
+                 pd.get("confidence", 0),
+                 json.dumps(pd, ensure_ascii=False))
+            )
+        await db.commit()
+    logger.info(f"Saved VLM BOM data for {len(pages_data)} pages, session {session_id}")
+
+
+async def get_symbols(session_id: str = None) -> list[dict]:
+    """심볼 데이터 조회 (세션 지정 또는 전체)"""
+    async with aiosqlite.connect(str(SQLITE_DB_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        if session_id:
+            cursor = await db.execute(
+                "SELECT * FROM symbols WHERE session_id = ? ORDER BY category, id", (session_id,))
+        else:
+            cursor = await db.execute("SELECT * FROM symbols ORDER BY category, id")
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 async def execute_query(sql: str, params: tuple = ()) -> list[dict]:
