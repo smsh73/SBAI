@@ -301,9 +301,11 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
                         symbols_dir: str, pdf_path: str) -> list[dict]:
     """Text-position-based symbol cropping.
 
-    Uses PyMuPDF to find each description's position on the page,
-    then crops the symbol graphic area to the LEFT of the description text
-    from the high-resolution rendered image.
+    Improvements over basic cropping:
+    - Groups symbols by column and uses midpoint between consecutive symbols
+      as row boundaries → full symbol height without clipping
+    - Left/right insets (8pt / 5pt) to exclude vertical grid lines
+    - Post-crop PIL-based vertical border trimming as safety net
     """
     from PIL import Image
 
@@ -319,9 +321,62 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
     scale_x = img_w / pw
     scale_y = img_h / ph
 
-    # Symbol graphic width (pt) - distance from column left edge to description
-    SYM_WIDTH_PT = 70
+    SYM_WIDTH_PT = 70      # Total width from description to left column border
+    LEFT_INSET_PT = 8      # Inset from left column border to avoid vertical line
+    RIGHT_INSET_PT = 5     # Inset from right (before description) to avoid vertical line
 
+    MIN_HEIGHT_PT = 12     # Minimum crop height in points
+    MAX_HEIGHT_PT = 60     # Maximum crop height (prevents multi-row capture)
+
+    # ── First pass: find all text positions (with VLM bbox hint) ──
+    text_rects: dict[int, fitz.Rect] = {}
+    for idx, sym in enumerate(symbols):
+        desc = (sym.get("description") or "").strip()
+        if not desc:
+            continue
+        bbox_pct = sym.get("bbox_pct")
+        hint = None
+        if bbox_pct and len(bbox_pct) >= 4:
+            hint = ((bbox_pct[0] + bbox_pct[2]) / 2, (bbox_pct[1] + bbox_pct[3]) / 2)
+        rect = _find_text_on_page(page, desc, bbox_hint=hint)
+        if rect:
+            text_rects[idx] = rect
+
+    # ── Group by column (x-proximity) and compute row boundaries ──
+    entries = sorted(text_rects.items(), key=lambda e: (e[1].x0, e[1].y0))
+
+    columns: list[list[tuple[int, fitz.Rect]]] = []
+    for idx, rect in entries:
+        placed = False
+        for col in columns:
+            if abs(rect.x0 - col[0][1].x0) < 50:
+                col.append((idx, rect))
+                placed = True
+                break
+        if not placed:
+            columns.append([(idx, rect)])
+
+    row_bounds: dict[int, tuple[float, float]] = {}
+    for col in columns:
+        col.sort(key=lambda e: e[1].y0)
+        for i, (idx, rect) in enumerate(col):
+            # Top: midpoint with previous symbol
+            if i > 0:
+                prev_rect = col[i - 1][1]
+                y_top = (prev_rect.y1 + rect.y0) / 2
+            else:
+                y_top = max(0, rect.y0 - 15)
+
+            # Bottom: midpoint with next symbol
+            if i < len(col) - 1:
+                next_rect = col[i + 1][1]
+                y_bottom = (rect.y1 + next_rect.y0) / 2
+            else:
+                y_bottom = min(ph, rect.y1 + 15)
+
+            row_bounds[idx] = (y_top, y_bottom)
+
+    # ── Second pass: crop images ──
     for idx, sym in enumerate(symbols):
         desc = (sym.get("description") or "").strip()
         if not desc:
@@ -329,33 +384,55 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
             sym["image_filename"] = None
             continue
 
-        # Find description text position on page
-        text_rect = _find_text_on_page(page, desc)
+        text_rect = text_rects.get(idx)
 
         if text_rect:
-            # Symbol graphic is to the LEFT of description text
-            sym_x0 = max(0, text_rect.x0 - SYM_WIDTH_PT)
-            sym_y0 = max(0, text_rect.y0 - 3)
-            sym_x1 = max(sym_x0 + 10, text_rect.x0 - 2)
-            sym_y1 = min(ph, text_rect.y1 + 3)
+            y_top, y_bottom = row_bounds.get(idx, (
+                max(0, text_rect.y0 - 10),
+                min(ph, text_rect.y1 + 10),
+            ))
+            # Enforce minimum / maximum height
+            if y_bottom - y_top < MIN_HEIGHT_PT:
+                center_y = (y_top + y_bottom) / 2
+                y_top = max(0, center_y - MIN_HEIGHT_PT / 2)
+                y_bottom = min(ph, center_y + MIN_HEIGHT_PT / 2)
+            elif y_bottom - y_top > MAX_HEIGHT_PT:
+                center_y = (text_rect.y0 + text_rect.y1) / 2
+                y_top = max(0, center_y - MAX_HEIGHT_PT / 2)
+                y_bottom = min(ph, center_y + MAX_HEIGHT_PT / 2)
+
+            sym_x0 = max(0, text_rect.x0 - SYM_WIDTH_PT + LEFT_INSET_PT)
+            sym_y0 = y_top
+            sym_x1 = max(sym_x0 + 10, text_rect.x0 - RIGHT_INSET_PT)
+            sym_y1 = y_bottom
         else:
-            # Fallback: use VLM bbox with left expansion
+            # Fallback: use VLM bbox with generous padding
             bbox_pct = sym.get("bbox_pct")
             if not bbox_pct or len(bbox_pct) != 4:
                 sym["image_path"] = None
                 sym["image_filename"] = None
                 continue
             x1_pct, y1_pct, x2_pct, y2_pct = bbox_pct
-            sym_x0 = max(0, x1_pct - 0.03) * pw
-            sym_y0 = max(0, y1_pct - 0.003) * ph
-            sym_x1 = min(pw, x2_pct + 0.01) * pw
-            sym_y1 = min(ph, y2_pct + 0.003) * ph
+            sym_x0 = max(0, x1_pct * pw - 5)
+            sym_y0 = max(0, y1_pct * ph - 10)
+            sym_x1 = min(pw, x2_pct * pw + 5)
+            sym_y1 = min(ph, y2_pct * ph + 10)
+            # Enforce min/max height for fallback too
+            h_pt = sym_y1 - sym_y0
+            if h_pt < MIN_HEIGHT_PT:
+                cy = (sym_y0 + sym_y1) / 2
+                sym_y0 = max(0, cy - MIN_HEIGHT_PT / 2)
+                sym_y1 = min(ph, cy + MIN_HEIGHT_PT / 2)
+            elif h_pt > MAX_HEIGHT_PT:
+                cy = (sym_y0 + sym_y1) / 2
+                sym_y0 = max(0, cy - MAX_HEIGHT_PT / 2)
+                sym_y1 = min(ph, cy + MAX_HEIGHT_PT / 2)
 
         # Convert to hires pixels
-        px0 = max(0, int(sym_x0 * scale_x) - 4)
-        py0 = max(0, int(sym_y0 * scale_y) - 4)
-        px1 = min(img_w, int(sym_x1 * scale_x) + 4)
-        py1 = min(img_h, int(sym_y1 * scale_y) + 4)
+        px0 = max(0, int(sym_x0 * scale_x))
+        py0 = max(0, int(sym_y0 * scale_y))
+        px1 = min(img_w, int(sym_x1 * scale_x))
+        py1 = min(img_h, int(sym_y1 * scale_y))
 
         if (px1 - px0) < 15 or (py1 - py0) < 10:
             sym["image_path"] = None
@@ -368,6 +445,7 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
 
         try:
             crop = hires_img.crop((px0, py0, px1, py1))
+            crop = _trim_vertical_borders(crop)
             crop.save(str(img_path))
             sym["image_path"] = str(img_path)
             sym["image_filename"] = img_filename
@@ -381,10 +459,74 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
     return symbols
 
 
-def _find_text_on_page(page, description: str):
-    """Search for description text on the page using progressively shorter queries."""
-    # Normalize description for search
+def _trim_vertical_borders(img):
+    """Remove vertical grid lines from left/right edges of cropped symbol image.
+
+    Scans edge columns for predominantly dark pixel columns (indicating a grid line)
+    and trims them with a small margin.
+    """
+    w, h = img.size
+    if h < 10 or w < 20:
+        return img
+
+    gray = img.convert('L')
+    pixels = gray.load()
+
+    dark_threshold = 160
+    line_ratio = 0.6   # Column with >60% dark pixels = grid line (not symbol part)
+    max_check = min(25, w // 3)  # Scan up to 25px or 1/3 of width
+
+    # Scan left region: find rightmost line column within range
+    left = 0
+    for x in range(max_check):
+        dark_count = sum(1 for y in range(h) if pixels[x, y] < dark_threshold)
+        if dark_count / h > line_ratio:
+            left = x + 1
+
+    # Scan right region: find leftmost line column within range
+    right = w
+    for x in range(w - 1, max(w - 1 - max_check, 0), -1):
+        dark_count = sum(1 for y in range(h) if pixels[x, y] < dark_threshold)
+        if dark_count / h > line_ratio:
+            right = x
+
+    # Add margin past the detected line
+    if left > 0:
+        left = min(left + 4, w // 3)
+    if right < w:
+        right = max(right - 4, w * 2 // 3)
+
+    if left >= right:
+        return img
+
+    if left > 0 or right < w:
+        return img.crop((left, 0, right, h))
+    return img
+
+
+def _find_text_on_page(page, description: str, bbox_hint=None):
+    """Search for description text on the page using progressively shorter queries.
+
+    Args:
+        bbox_hint: Optional (x_pct, y_pct) from VLM bbox center.
+                   When multiple matches found, picks the closest one.
+    """
     desc = description.strip()
+    pw, ph = page.rect.width, page.rect.height
+
+    def _pick_best(instances):
+        if not bbox_hint:
+            return instances[0]
+        hint_x = bbox_hint[0] * pw
+        hint_y = bbox_hint[1] * ph
+        best = min(instances, key=lambda r:
+                   (r.x0 - hint_x) ** 2 + (r.y0 - hint_y) ** 2)
+        # Reject if too far from hint (>25% of normalized page diagonal)
+        dist_norm = (((best.x0 / pw - bbox_hint[0]) ** 2 +
+                      (best.y0 / ph - bbox_hint[1]) ** 2) ** 0.5)
+        if dist_norm > 0.25:
+            return None
+        return best
 
     # Try progressively shorter search strings
     for search_len in [40, 25, 16, 10]:
@@ -393,14 +535,14 @@ def _find_text_on_page(page, description: str):
             continue
         instances = page.search_for(search_text)
         if instances:
-            return instances[0]
+            return _pick_best(instances)
 
     # Try individual significant words (skip short common words)
     words = [w for w in desc.split() if len(w) > 4]
     for word in words[:3]:
         instances = page.search_for(word)
         if instances:
-            return instances[0]
+            return _pick_best(instances)
 
     return None
 
