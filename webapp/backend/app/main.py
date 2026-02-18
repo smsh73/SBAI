@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import UPLOAD_DIR, OUTPUT_DIR
-from app.routers import upload, results, download, chat
+from app.routers import upload, results, download, chat, symbols
 from app.services.db_service import init_db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -32,6 +32,7 @@ app.include_router(upload.router, prefix="/api")
 app.include_router(results.router, prefix="/api")
 app.include_router(download.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
+app.include_router(symbols.router, prefix="/api")
 
 
 @app.on_event("startup")

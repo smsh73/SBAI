@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Download, Image, FileSpreadsheet, X, ZoomIn,
+  Download, Image, FileSpreadsheet, X, ZoomIn, Search,
   ChevronLeft, ChevronRight, RefreshCw, Package, Wrench,
   Eye, Layers, Activity
 } from "lucide-react";
@@ -69,6 +69,35 @@ interface VlmBomPreview {
   pages: VlmPageData[];
 }
 
+interface SymbolEntry {
+  id: number;
+  category: string;
+  symbol_name: string;
+  description: string;
+  image_url: string | null;
+  image_filename?: string;
+  bbox_pct?: number[];
+}
+
+interface SymbolLibraryData {
+  session_id: string;
+  total: number;
+  total_all: number;
+  categories: Record<string, number>;
+  symbols: SymbolEntry[];
+}
+
+const SYMBOL_PAGE_SIZE = 24;
+
+const CATEGORY_COLORS: Record<string, string> = {
+  PIPING: "#2563eb",
+  VALVE: "#dc2626",
+  ACTUATOR: "#16a34a",
+  ACTUATED_VALVE: "#9333ea",
+  SAFETY_DEVICE: "#ea580c",
+  OTHER: "#6b7280",
+};
+
 interface SessionResult {
   session_id: string;
   status: string;
@@ -113,6 +142,12 @@ export default function ResultsPage() {
   const [vlmPage, setVlmPage] = useState(0);
   const [expandedVlmPage, setExpandedVlmPage] = useState<number | null>(null);
   const [vlmTab, setVlmTab] = useState<"bom" | "drawing" | "index">("index");
+  // Symbol Library state
+  const [symbolData, setSymbolData] = useState<SymbolLibraryData | null>(null);
+  const [symbolTab, setSymbolTab] = useState("ALL");
+  const [symbolSearch, setSymbolSearch] = useState("");
+  const [symbolPage, setSymbolPage] = useState(0);
+  const [symbolDetail, setSymbolDetail] = useState<SymbolEntry | null>(null);
 
   const loadResults = useCallback(async (sid: string) => {
     setLoading(true);
@@ -132,6 +167,28 @@ export default function ResultsPage() {
   useEffect(() => {
     if (sessionId) loadResults(sessionId);
   }, [sessionId, loadResults]);
+
+  const loadSymbolLibrary = useCallback(async (sid: string, category?: string, search?: string) => {
+    try {
+      const params = new URLSearchParams();
+      if (category && category !== "ALL") params.set("category", category);
+      if (search) params.set("search", search);
+      const qs = params.toString();
+      const res = await fetch(`${API}/symbols/${sid}${qs ? "?" + qs : ""}`);
+      if (!res.ok) return;
+      const result: SymbolLibraryData = await res.json();
+      setSymbolData(result);
+      setSymbolPage(0);
+    } catch (e) {
+      console.error("Failed to load symbol library:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (data?.preview.symbols && data.preview.symbols.total > 0 && sessionId) {
+      loadSymbolLibrary(sessionId);
+    }
+  }, [data?.preview.symbols, sessionId, loadSymbolLibrary]);
 
   useEffect(() => {
     if ((data?.status === "processing" || data?.status === "vlm_analyzing") && sessionId) {
@@ -183,6 +240,11 @@ export default function ResultsPage() {
   const vlmData = data?.preview.vlm_bom?.pages || [];
   const totalVlmPages = Math.ceil(vlmData.length / VLM_PAGE_SIZE);
   const visibleVlm = vlmData.slice(vlmPage * VLM_PAGE_SIZE, (vlmPage + 1) * VLM_PAGE_SIZE);
+
+  // Symbol library pagination
+  const symbolList = symbolData?.symbols || [];
+  const totalSymbolPages = Math.ceil(symbolList.length / SYMBOL_PAGE_SIZE);
+  const visibleSymbols = symbolList.slice(symbolPage * SYMBOL_PAGE_SIZE, (symbolPage + 1) * SYMBOL_PAGE_SIZE);
 
   return (
     <div>
@@ -573,6 +635,146 @@ export default function ResultsPage() {
             </div>
           )}
 
+          {/* Symbol Library Browser */}
+          {symbolData && symbolData.total_all > 0 && (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <div className="card-header">
+                <h3><Layers size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />P&ID Symbol Library</h3>
+                <span style={{ fontSize: 13, color: "var(--gray-500)" }}>
+                  {symbolData.total_all}개 심볼
+                </span>
+              </div>
+              <div className="card-body">
+                {/* Category Tabs */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+                  <button
+                    className={`btn ${symbolTab === "ALL" ? "btn-primary" : "btn-outline"}`}
+                    style={{ padding: "6px 14px", fontSize: 12 }}
+                    onClick={() => { setSymbolTab("ALL"); setSymbolPage(0); loadSymbolLibrary(sessionId!); }}
+                  >
+                    ALL ({symbolData.total_all})
+                  </button>
+                  {Object.entries(symbolData.categories).map(([cat, count]) => (
+                    <button
+                      key={cat}
+                      className={`btn ${symbolTab === cat ? "btn-primary" : "btn-outline"}`}
+                      style={{
+                        padding: "6px 14px", fontSize: 12,
+                        ...(symbolTab === cat ? { background: CATEGORY_COLORS[cat] || "var(--navy)" } : {})
+                      }}
+                      onClick={() => { setSymbolTab(cat); setSymbolPage(0); loadSymbolLibrary(sessionId!, cat); }}
+                    >
+                      {cat.replace(/_/g, " ")} ({count})
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search Bar */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                  <div style={{ position: "relative", flex: 1 }}>
+                    <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--gray-500)" }} />
+                    <input
+                      type="text"
+                      value={symbolSearch}
+                      onChange={(e) => setSymbolSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          setSymbolPage(0);
+                          loadSymbolLibrary(sessionId!, symbolTab !== "ALL" ? symbolTab : undefined, symbolSearch || undefined);
+                        }
+                      }}
+                      placeholder="심볼 이름/설명 검색..."
+                      style={{
+                        width: "100%", padding: "8px 12px 8px 36px",
+                        border: "1px solid var(--gray-300)", borderRadius: 8,
+                        fontSize: 13, fontFamily: "inherit"
+                      }}
+                    />
+                  </div>
+                  <button
+                    className="btn btn-outline"
+                    style={{ padding: "6px 14px", fontSize: 12 }}
+                    onClick={() => {
+                      setSymbolPage(0);
+                      loadSymbolLibrary(sessionId!, symbolTab !== "ALL" ? symbolTab : undefined, symbolSearch || undefined);
+                    }}
+                  >
+                    <Search size={14} /> 검색
+                  </button>
+                  {symbolSearch && (
+                    <button
+                      className="btn btn-outline"
+                      style={{ padding: "6px 14px", fontSize: 12 }}
+                      onClick={() => {
+                        setSymbolSearch("");
+                        setSymbolPage(0);
+                        loadSymbolLibrary(sessionId!, symbolTab !== "ALL" ? symbolTab : undefined);
+                      }}
+                    >
+                      <X size={14} /> 초기화
+                    </button>
+                  )}
+                </div>
+
+                {/* Symbol Grid */}
+                <div className="symbol-grid">
+                  {visibleSymbols.map((sym) => (
+                    <div
+                      key={sym.id}
+                      className="symbol-card"
+                      onClick={() => setSymbolDetail(sym)}
+                    >
+                      <div className="symbol-card-image">
+                        {sym.image_url ? (
+                          <img src={sym.image_url} alt={sym.symbol_name} loading="lazy" />
+                        ) : (
+                          <div className="symbol-card-placeholder">
+                            <Activity size={28} style={{ color: "var(--gray-300)" }} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="symbol-card-info">
+                        <span
+                          className="symbol-category-badge"
+                          style={{ background: `${CATEGORY_COLORS[sym.category] || "#6b7280"}20`, color: CATEGORY_COLORS[sym.category] || "#6b7280" }}
+                        >
+                          {sym.category.replace(/_/g, " ")}
+                        </span>
+                        <div className="symbol-card-desc" title={sym.description}>
+                          {sym.description || sym.symbol_name}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Empty State */}
+                {visibleSymbols.length === 0 && (
+                  <div style={{ textAlign: "center", padding: 40, color: "var(--gray-500)" }}>
+                    {symbolSearch ? "검색 결과가 없습니다" : "심볼이 없습니다"}
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {totalSymbolPages > 1 && (
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 16 }}>
+                    <button className="btn btn-outline" style={{ padding: "6px 10px" }}
+                      disabled={symbolPage === 0} onClick={() => setSymbolPage(p => p - 1)}>
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span style={{ fontSize: 13, color: "var(--gray-500)", minWidth: 80, textAlign: "center" }}>
+                      {symbolPage + 1} / {totalSymbolPages}
+                    </span>
+                    <button className="btn btn-outline" style={{ padding: "6px 10px" }}
+                      disabled={symbolPage >= totalSymbolPages - 1} onClick={() => setSymbolPage(p => p + 1)}>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 이미지 미리보기 */}
           {data.images.length > 0 && (
             <div className="card" style={{ marginBottom: 24 }}>
@@ -761,6 +963,59 @@ export default function ResultsPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* 심볼 상세 모달 */}
+      {symbolDetail && (
+        <div className="image-modal-overlay" onClick={() => setSymbolDetail(null)}>
+          <div className="symbol-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--navy)" }}>심볼 상세</h3>
+              <button onClick={() => setSymbolDetail(null)} style={{ padding: 4 }}>
+                <X size={20} style={{ color: "var(--gray-500)" }} />
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+              <div style={{
+                flex: "0 0 200px", height: 200, display: "flex", alignItems: "center", justifyContent: "center",
+                background: "var(--gray-50)", borderRadius: 8, border: "1px solid var(--gray-200)"
+              }}>
+                {symbolDetail.image_url ? (
+                  <img src={symbolDetail.image_url} alt={symbolDetail.symbol_name}
+                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", padding: 8 }} />
+                ) : (
+                  <Activity size={48} style={{ color: "var(--gray-300)" }} />
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ marginBottom: 12 }}>
+                  <span
+                    className="symbol-category-badge"
+                    style={{
+                      background: `${CATEGORY_COLORS[symbolDetail.category] || "#6b7280"}20`,
+                      color: CATEGORY_COLORS[symbolDetail.category] || "#6b7280",
+                      fontSize: 13, padding: "4px 12px"
+                    }}
+                  >
+                    {symbolDetail.category.replace(/_/g, " ")}
+                  </span>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <strong style={{ color: "var(--gray-500)", fontSize: 12 }}>이름</strong>
+                  <div style={{ fontSize: 15, fontWeight: 600 }}>{symbolDetail.symbol_name}</div>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <strong style={{ color: "var(--gray-500)", fontSize: 12 }}>설명</strong>
+                  <div style={{ fontSize: 14 }}>{symbolDetail.description}</div>
+                </div>
+                <div>
+                  <strong style={{ color: "var(--gray-500)", fontSize: 12 }}>ID</strong>
+                  <div style={{ fontSize: 13, color: "var(--gray-500)" }}>#{symbolDetail.id}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 이미지 모달 */}

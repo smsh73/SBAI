@@ -137,9 +137,14 @@ async def get_results(session_id: str):
         for s in symbols:
             cat = s.get("category", "OTHER")
             by_cat[cat] = by_cat.get(cat, 0) + 1
+            # 심볼 이미지 URL 추가
+            img_fn = s.get("image_filename")
+            if img_fn:
+                s["image_url"] = f"/api/symbols/{session_id}/image/{img_fn}"
         preview["symbols"] = {
             "total": len(symbols),
             "by_category": by_cat,
+            "categories": list(by_cat.keys()),
             "sample": symbols[:10],
         }
 
