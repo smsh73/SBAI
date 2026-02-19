@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   Download, Image, FileSpreadsheet, X, ZoomIn, Search,
   ChevronLeft, ChevronRight, RefreshCw, Package, Wrench,
-  Eye, Layers, Activity
+  Eye, Layers, Activity, BarChart3, GitCompare
 } from "lucide-react";
 
 const API = "/api";
@@ -87,6 +87,58 @@ interface SymbolLibraryData {
   symbols: SymbolEntry[];
 }
 
+interface ComparisonItem {
+  bom_letter: string;
+  bom_description: string;
+  bom_quantity: string;
+  bom_size: string;
+  drawing_component: string;
+  drawing_quantity: number | string;
+  match_status: string;
+  quantity_diff: number;
+  notes: string;
+}
+
+interface ComparisonPageResult {
+  page: number;
+  drawing_number: string;
+  line_no: string;
+  comparison_items: ComparisonItem[];
+  summary: {
+    total_bom_items: number;
+    comparable_items: number;
+    matched: number;
+    mismatched: number;
+    bom_only: number;
+    drawing_only: number;
+    na_items: number;
+    match_rate: number;
+  };
+}
+
+interface BomComparisonPreview {
+  pages_compared: number;
+  overall: {
+    total_comparable: number;
+    total_matched: number;
+    total_mismatched: number;
+    total_bom_only: number;
+    total_drawing_only: number;
+    match_rate: number;
+  };
+  pages: ComparisonPageResult[];
+}
+
+interface PidAnalysisPreview {
+  total_line_specs: number;
+  total_valves: number;
+  total_symbols: number;
+  pages_analyzed: number[];
+  line_specs: any[];
+  valves: any[];
+  symbols_found: any[];
+}
+
 const SYMBOL_PAGE_SIZE = 24;
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -122,6 +174,8 @@ interface SessionResult {
     vlm_bom?: VlmBomPreview;
     symbols?: { total: number; by_category: Record<string, number>; sample: any[] };
     vlm_stats?: any;
+    pid_analysis?: PidAnalysisPreview;
+    bom_comparison?: BomComparisonPreview;
   };
 }
 
@@ -148,6 +202,8 @@ export default function ResultsPage() {
   const [symbolSearch, setSymbolSearch] = useState("");
   const [symbolPage, setSymbolPage] = useState(0);
   const [symbolDetail, setSymbolDetail] = useState<SymbolEntry | null>(null);
+  // BOM Comparison state
+  const [expandedCompPage, setExpandedCompPage] = useState<number | null>(null);
 
   const loadResults = useCallback(async (sid: string) => {
     setLoading(true);
@@ -298,7 +354,7 @@ export default function ResultsPage() {
       {data && (data.status === "completed" || data.preview.vlm_bom) && (
         <>
           {/* 통계 요약 카드 */}
-          {(data.preview.valves || data.preview.pipe_bom || data.preview.vlm_bom || data.preview.dimensions) && (
+          {(data.preview.valves || data.preview.pipe_bom || data.preview.vlm_bom || data.preview.dimensions || data.preview.pid_analysis || data.preview.bom_comparison) && (
             <div className="stats-grid" style={{ marginBottom: 24 }}>
               {data.preview.vlm_bom && (
                 <>
@@ -361,6 +417,36 @@ export default function ResultsPage() {
                   <div className="value">{Object.keys(data.preview.dimensions.views || {}).length}</div>
                   <div className="label">뷰 분석</div>
                 </div>
+              )}
+              {data.preview.pid_analysis && (
+                <>
+                  <div className="stat-card" style={{ borderLeft: "4px solid #9333ea" }}>
+                    <div className="value">{data.preview.pid_analysis.total_line_specs}</div>
+                    <div className="label">라인스펙</div>
+                  </div>
+                  <div className="stat-card" style={{ borderLeft: "4px solid #dc2626" }}>
+                    <div className="value">{data.preview.pid_analysis.total_valves}</div>
+                    <div className="label">밸브 (VLM)</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="value">{data.preview.pid_analysis.total_symbols}</div>
+                    <div className="label">심볼 식별</div>
+                  </div>
+                </>
+              )}
+              {data.preview.bom_comparison && (
+                <>
+                  <div className="stat-card" style={{ borderLeft: `4px solid ${data.preview.bom_comparison.overall.match_rate >= 80 ? "#16a34a" : data.preview.bom_comparison.overall.match_rate >= 50 ? "#eab308" : "#dc2626"}` }}>
+                    <div className="value" style={{ color: data.preview.bom_comparison.overall.match_rate >= 80 ? "#16a34a" : data.preview.bom_comparison.overall.match_rate >= 50 ? "#eab308" : "#dc2626" }}>
+                      {data.preview.bom_comparison.overall.match_rate}%
+                    </div>
+                    <div className="label">BOM 일치율</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="value">{data.preview.bom_comparison.pages_compared}</div>
+                    <div className="label">비교 페이지</div>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -631,6 +717,256 @@ export default function ResultsPage() {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* P&ID VLM 분석 결과 */}
+          {data.preview.pid_analysis && (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <div className="card-header">
+                <h3><GitCompare size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />P&ID 분석 결과</h3>
+                <span style={{ fontSize: 13, color: "var(--gray-500)" }}>
+                  라인스펙 {data.preview.pid_analysis.total_line_specs}개 | 밸브 {data.preview.pid_analysis.total_valves}개 | 심볼 {data.preview.pid_analysis.total_symbols}개
+                </span>
+              </div>
+              <div className="card-body">
+                {/* Line Specifications */}
+                {data.preview.pid_analysis.line_specs.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <h4 style={{ fontSize: 14, color: "var(--navy)", marginBottom: 8 }}>Line Specifications</h4>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th>No</th><th>Full Spec</th><th>Size</th><th>System</th>
+                            <th>Tag</th><th>Class</th><th>Schedule</th><th>Rating</th>
+                            <th>Material</th><th>Fluid</th><th>Sheet</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.preview.pid_analysis.line_specs.map((ls: any, i: number) => (
+                            <tr key={i}>
+                              <td>{i + 1}</td>
+                              <td style={{ fontWeight: 600, fontFamily: "monospace", fontSize: 11 }}>{ls.full_spec || ""}</td>
+                              <td>{ls.size || ""}</td>
+                              <td>{ls.system_code || ""}</td>
+                              <td style={{ fontWeight: 600, color: "var(--navy)" }}>{ls.tag || ""}</td>
+                              <td>{ls.piping_class || ""}</td>
+                              <td>{ls.schedule || ""}</td>
+                              <td>{ls.pressure_rating || ""}</td>
+                              <td>{ls.material_code || ""}</td>
+                              <td>{ls.fluid || ""}</td>
+                              <td>{ls.sheet || ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Valves */}
+                {data.preview.pid_analysis.valves.length > 0 && (
+                  <div>
+                    <h4 style={{ fontSize: 14, color: "var(--navy)", marginBottom: 8 }}>밸브 목록</h4>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th>No</th><th>Tag</th><th>Valve Type</th><th>Actuator</th>
+                            <th>Size</th><th>Line Spec</th><th>Class</th><th>Schedule</th>
+                            <th>Rating</th><th>Material</th><th>Fluid</th><th>Source</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.preview.pid_analysis.valves.map((v: any, i: number) => (
+                            <tr key={i}>
+                              <td>{i + 1}</td>
+                              <td style={{ fontWeight: 600, color: "#dc2626" }}>{v.tag || ""}</td>
+                              <td>{v.valve_type || ""}</td>
+                              <td>{v.actuator || ""}</td>
+                              <td>{v.size || ""}</td>
+                              <td style={{ fontFamily: "monospace", fontSize: 11 }}>{v.line_spec || ""}</td>
+                              <td>{v.piping_class || ""}</td>
+                              <td>{v.schedule || ""}</td>
+                              <td>{v.pressure_rating || ""}</td>
+                              <td>{v.material_code || ""}</td>
+                              <td>{v.fluid || ""}</td>
+                              <td>
+                                <span style={{
+                                  padding: "2px 6px", borderRadius: 4, fontSize: 10,
+                                  background: v.source === "VLM" ? "#dbeafe" : "#fef3c7",
+                                  color: v.source === "VLM" ? "#1d4ed8" : "#92400e"
+                                }}>{v.source || "?"}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Symbols Found */}
+                {data.preview.pid_analysis.symbols_found && data.preview.pid_analysis.symbols_found.length > 0 && (
+                  <div style={{ marginTop: 20 }}>
+                    <h4 style={{ fontSize: 14, color: "var(--navy)", marginBottom: 8 }}>식별된 심볼</h4>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {data.preview.pid_analysis.symbols_found.map((sym: any, i: number) => (
+                        <span key={i} style={{
+                          padding: "4px 10px", borderRadius: 4, fontSize: 12,
+                          background: sym.type === "valve" ? "#fef2f2" : sym.type === "pipe" ? "#f0fdf4" : "#f0f9ff",
+                          border: `1px solid ${sym.type === "valve" ? "#fecaca" : sym.type === "pipe" ? "#bbf7d0" : "#bae6fd"}`,
+                          color: sym.type === "valve" ? "#dc2626" : sym.type === "pipe" ? "#16a34a" : "#2563eb"
+                        }}>
+                          {sym.symbol_name || sym.type} {sym.tag ? `(${sym.tag})` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* BOM vs Drawing 비교 결과 */}
+          {data.preview.bom_comparison && (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <div className="card-header">
+                <h3><BarChart3 size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />BOM vs Drawing 비교</h3>
+                <span style={{ fontSize: 13, color: "var(--gray-500)" }}>
+                  {data.preview.bom_comparison.pages_compared}개 페이지 비교
+                </span>
+              </div>
+              <div className="card-body">
+                {/* Overall Stats */}
+                <div style={{
+                  display: "flex", gap: 16, marginBottom: 20, padding: 16,
+                  background: "var(--gray-50)", borderRadius: 8, flexWrap: "wrap", alignItems: "center"
+                }}>
+                  <div style={{ textAlign: "center", minWidth: 80 }}>
+                    <div style={{
+                      fontSize: 28, fontWeight: 700,
+                      color: data.preview.bom_comparison.overall.match_rate >= 80 ? "#16a34a" :
+                             data.preview.bom_comparison.overall.match_rate >= 50 ? "#eab308" : "#dc2626"
+                    }}>
+                      {data.preview.bom_comparison.overall.match_rate}%
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--gray-500)" }}>전체 일치율</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    <div style={{ padding: "6px 12px", background: "#dcfce7", borderRadius: 6, fontSize: 13 }}>
+                      <strong style={{ color: "#16a34a" }}>{data.preview.bom_comparison.overall.total_matched}</strong>
+                      <span style={{ color: "#166534", marginLeft: 4 }}>일치</span>
+                    </div>
+                    <div style={{ padding: "6px 12px", background: "#fecaca", borderRadius: 6, fontSize: 13 }}>
+                      <strong style={{ color: "#dc2626" }}>{data.preview.bom_comparison.overall.total_mismatched}</strong>
+                      <span style={{ color: "#991b1b", marginLeft: 4 }}>불일치</span>
+                    </div>
+                    <div style={{ padding: "6px 12px", background: "#fef9c3", borderRadius: 6, fontSize: 13 }}>
+                      <strong style={{ color: "#ca8a04" }}>{data.preview.bom_comparison.overall.total_bom_only}</strong>
+                      <span style={{ color: "#854d0e", marginLeft: 4 }}>BOM만</span>
+                    </div>
+                    <div style={{ padding: "6px 12px", background: "#dbeafe", borderRadius: 6, fontSize: 13 }}>
+                      <strong style={{ color: "#2563eb" }}>{data.preview.bom_comparison.overall.total_drawing_only}</strong>
+                      <span style={{ color: "#1e40af", marginLeft: 4 }}>도면만</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-page comparison */}
+                {(data.preview.bom_comparison.pages || []).map((cp: ComparisonPageResult) => (
+                  <div key={cp.page} style={{ marginBottom: 12 }}>
+                    <div
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        padding: "8px 12px", background: "var(--gray-100)", borderRadius: 6,
+                        cursor: "pointer"
+                      }}
+                      onClick={() => setExpandedCompPage(expandedCompPage === cp.page ? null : cp.page)}
+                    >
+                      <span style={{ fontWeight: 700, color: "var(--navy)" }}>Page {cp.page}</span>
+                      <span style={{ fontSize: 12, color: "var(--gray-500)" }}>
+                        {cp.drawing_number || ""} {cp.line_no ? `| Line ${cp.line_no}` : ""}
+                      </span>
+                      <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{
+                          fontSize: 12, padding: "2px 8px", fontWeight: 600, borderRadius: 4,
+                          background: cp.summary.match_rate >= 80 ? "#dcfce7" :
+                                     cp.summary.match_rate >= 50 ? "#fef9c3" : "#fecaca",
+                          color: cp.summary.match_rate >= 80 ? "#166534" :
+                                 cp.summary.match_rate >= 50 ? "#854d0e" : "#991b1b"
+                        }}>
+                          {cp.summary.match_rate}%
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--gray-500)" }}>
+                          {cp.summary.matched}M / {cp.summary.mismatched}X / {cp.summary.comparable_items}T
+                        </span>
+                      </div>
+                      <ChevronRight size={14} style={{
+                        transform: expandedCompPage === cp.page ? "rotate(90deg)" : "none",
+                        transition: "transform 0.2s"
+                      }} />
+                    </div>
+
+                    {expandedCompPage === cp.page && cp.comparison_items && (
+                      <div style={{ padding: "12px 0", overflowX: "auto" }}>
+                        <table className="data-table" style={{ fontSize: 11 }}>
+                          <thead>
+                            <tr>
+                              <th>Code</th><th>BOM Description</th><th>BOM Size</th>
+                              <th>BOM Qty</th><th>Drawing Component</th><th>Drawing Qty</th>
+                              <th>Status</th><th>Diff</th><th>비고</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cp.comparison_items.map((ci: ComparisonItem, i: number) => {
+                              const bgColor =
+                                ci.match_status === "MATCH" ? "#f0fdf4" :
+                                ci.match_status === "MISMATCH" ? "#fef2f2" :
+                                ci.match_status === "BOM_ONLY" ? "#fefce8" :
+                                ci.match_status === "DRAWING_ONLY" ? "#eff6ff" :
+                                "transparent";
+                              return (
+                                <tr key={i} style={{ background: bgColor }}>
+                                  <td style={{ fontWeight: 600 }}>{ci.bom_letter}</td>
+                                  <td style={{ maxWidth: 200 }}>{ci.bom_description}</td>
+                                  <td>{ci.bom_size}</td>
+                                  <td>{ci.bom_quantity}</td>
+                                  <td>{ci.drawing_component}</td>
+                                  <td>{ci.drawing_quantity !== "" ? ci.drawing_quantity : "-"}</td>
+                                  <td>
+                                    <span style={{
+                                      padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+                                      background: ci.match_status === "MATCH" ? "#dcfce7" :
+                                                  ci.match_status === "MISMATCH" ? "#fecaca" :
+                                                  ci.match_status === "BOM_ONLY" ? "#fef9c3" :
+                                                  ci.match_status === "DRAWING_ONLY" ? "#dbeafe" : "#f3f4f6",
+                                      color: ci.match_status === "MATCH" ? "#166534" :
+                                             ci.match_status === "MISMATCH" ? "#991b1b" :
+                                             ci.match_status === "BOM_ONLY" ? "#854d0e" :
+                                             ci.match_status === "DRAWING_ONLY" ? "#1e40af" : "#6b7280"
+                                    }}>
+                                      {ci.match_status}
+                                    </span>
+                                  </td>
+                                  <td style={{
+                                    color: ci.quantity_diff > 0 ? "#2563eb" : ci.quantity_diff < 0 ? "#dc2626" : "",
+                                    fontWeight: ci.quantity_diff !== 0 ? 600 : 400
+                                  }}>
+                                    {ci.quantity_diff !== 0 ? (ci.quantity_diff > 0 ? `+${ci.quantity_diff}` : ci.quantity_diff) : ""}
+                                  </td>
+                                  <td style={{ fontSize: 10, color: "var(--gray-500)", maxWidth: 150 }}>{ci.notes}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}

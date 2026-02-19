@@ -433,17 +433,31 @@ def generate_pipe_bom_excel(pages_data: list[dict], output_path: str) -> str:
 
 ACCENT_FILL = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
 WARN_FILL = PatternFill(start_color="FCE4EC", end_color="FCE4EC", fill_type="solid")
+MATCH_FILL = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")  # green
+MISMATCH_FILL = PatternFill(start_color="FCE4EC", end_color="FCE4EC", fill_type="solid")  # red/pink
+BOM_ONLY_FILL = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")  # yellow
+DRAWING_ONLY_FILL = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")  # blue
+NA_FILL = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")  # gray
+
+STATUS_FILL_MAP = {
+    "MATCH": MATCH_FILL,
+    "MISMATCH": MISMATCH_FILL,
+    "BOM_ONLY": BOM_ONLY_FILL,
+    "DRAWING_ONLY": DRAWING_ONLY_FILL,
+    "N/A": NA_FILL,
+}
 
 
 def generate_vlm_bom_excel(vlm_data: list[dict], output_path: str) -> str:
     """VLM 분석 기반 정밀 PIPE BOM Excel 생성 (7개 시트)"""
     wb = openpyxl.Workbook()
 
-    # === Sheet 1: BOM Item List (전체 품목) ===
+    # === Sheet 1: BOM Item List (전체 품목 + 비교 결과) ===
     ws1 = wb.active
     ws1.title = "BOM Item List"
     h1 = ["Page", "Drawing No.", "Line No.", "Code", "Qty", "Size",
-          "Description", "Material Spec", "Weight (kg)", "Remarks"]
+          "Description", "Material Spec", "Weight (kg)", "Remarks",
+          "Drawing Qty", "Match Status", "Diff"]
     for col, h in enumerate(h1, 1):
         ws1.cell(row=1, column=col, value=h)
     _style_header(ws1, 1, len(h1))
@@ -455,6 +469,15 @@ def generate_vlm_bom_excel(vlm_data: list[dict], output_path: str) -> str:
         page = page_data.get("page", 0)
         dwg_no = page_data.get("drawing_number", "")
         line_no = page_data.get("line_no", "") or (page_data.get("drawing_info", {}) or {}).get("line_no", "")
+
+        # 비교 데이터 (letter_code 기준 lookup)
+        comparison = page_data.get("comparison", {})
+        comp_items_map = {}
+        for ci in comparison.get("comparison_items", []):
+            letter = ci.get("bom_letter", "")
+            if letter:
+                comp_items_map[letter] = ci
+
         for item in page_data.get("bom_table", []):
             total_items += 1
             code = item.get("letter_code", "") or item.get("item_no", "")
@@ -471,10 +494,25 @@ def generate_vlm_bom_excel(vlm_data: list[dict], output_path: str) -> str:
             ws1.cell(row=row, column=8, value=item.get("material_spec", item.get("material", "")))
             ws1.cell(row=row, column=9, value=wt if wt else "")
             ws1.cell(row=row, column=10, value=item.get("remarks", ""))
+
+            # 비교 결과 컬럼
+            ci = comp_items_map.get(code, {})
+            match_status = ci.get("match_status", "")
+            ws1.cell(row=row, column=11, value=ci.get("drawing_quantity", ""))
+            ws1.cell(row=row, column=12, value=match_status)
+            ws1.cell(row=row, column=13, value=ci.get("quantity_diff", "") if ci.get("quantity_diff") else "")
+
             _style_data(ws1, row, len(h1))
+
+            # 비교 상태별 색상
+            fill = STATUS_FILL_MAP.get(match_status)
+            if fill:
+                for c in range(11, 14):
+                    ws1.cell(row=row, column=c).fill = fill
+
             row += 1
 
-    for i, w in enumerate([6, 16, 8, 6, 8, 8, 40, 30, 10, 15], 1):
+    for i, w in enumerate([6, 16, 8, 6, 8, 8, 40, 30, 10, 15, 10, 12, 6], 1):
         ws1.column_dimensions[get_column_letter(i)].width = w
 
     # === Sheet 2: Pipe Pieces ===
@@ -723,7 +761,232 @@ def generate_vlm_bom_excel(vlm_data: list[dict], output_path: str) -> str:
     ws_summary.column_dimensions["A"].width = 35
     ws_summary.column_dimensions["B"].width = 50
 
+    # === Sheet 9: BOM Comparison (비교 상세) ===
+    has_comparison = any(pd.get("comparison") for pd in vlm_data)
+    if has_comparison:
+        ws_comp = wb.create_sheet("BOM Comparison")
+        hc = ["Page", "Drawing No.", "BOM Code", "BOM Description", "BOM Qty",
+              "BOM Size", "Drawing Component", "Drawing Qty", "Status", "Diff", "Notes"]
+        for col, h in enumerate(hc, 1):
+            ws_comp.cell(row=1, column=col, value=h)
+        _style_header(ws_comp, 1, len(hc))
+
+        row = 2
+        for page_data in vlm_data:
+            comparison = page_data.get("comparison", {})
+            if not comparison:
+                continue
+            page = comparison.get("page", page_data.get("page", 0))
+            dwg_no = comparison.get("drawing_number", page_data.get("drawing_number", ""))
+            for ci in comparison.get("comparison_items", []):
+                ws_comp.cell(row=row, column=1, value=page)
+                ws_comp.cell(row=row, column=2, value=dwg_no)
+                ws_comp.cell(row=row, column=3, value=ci.get("bom_letter", ""))
+                ws_comp.cell(row=row, column=4, value=ci.get("bom_description", ""))
+                ws_comp.cell(row=row, column=5, value=ci.get("bom_quantity", ""))
+                ws_comp.cell(row=row, column=6, value=ci.get("bom_size", ""))
+                ws_comp.cell(row=row, column=7, value=ci.get("drawing_component", ""))
+                ws_comp.cell(row=row, column=8, value=ci.get("drawing_quantity", ""))
+                status = ci.get("match_status", "")
+                ws_comp.cell(row=row, column=9, value=status)
+                ws_comp.cell(row=row, column=10, value=ci.get("quantity_diff", ""))
+                ws_comp.cell(row=row, column=11, value=ci.get("notes", ""))
+                _style_data(ws_comp, row, len(hc))
+
+                fill = STATUS_FILL_MAP.get(status)
+                if fill:
+                    for c in range(1, len(hc) + 1):
+                        ws_comp.cell(row=row, column=c).fill = fill
+                row += 1
+
+        for i, w in enumerate([6, 16, 8, 35, 8, 8, 20, 10, 12, 6, 30], 1):
+            ws_comp.column_dimensions[get_column_letter(i)].width = w
+
+        # === Sheet 10: Comparison Summary (비교 요약) ===
+        ws_cs = wb.create_sheet("Comparison Summary")
+        hcs = ["Page", "Drawing No.", "Line No.", "BOM Items", "Comparable",
+               "Matched", "Mismatched", "BOM Only", "Drawing Only", "Match Rate (%)"]
+        for col, h in enumerate(hcs, 1):
+            ws_cs.cell(row=1, column=col, value=h)
+        _style_header(ws_cs, 1, len(hcs))
+
+        row = 2
+        tot_matched = tot_mismatched = tot_bom_only = tot_drawing_only = tot_comparable = 0
+        for page_data in vlm_data:
+            comparison = page_data.get("comparison", {})
+            if not comparison:
+                continue
+            summary = comparison.get("summary", {})
+            matched = summary.get("matched", 0)
+            mismatched = summary.get("mismatched", 0)
+            bom_only = summary.get("bom_only", 0)
+            drawing_only = summary.get("drawing_only", 0)
+            comparable = summary.get("comparable_items", 0)
+            tot_matched += matched
+            tot_mismatched += mismatched
+            tot_bom_only += bom_only
+            tot_drawing_only += drawing_only
+            tot_comparable += comparable
+
+            ws_cs.cell(row=row, column=1, value=comparison.get("page", 0))
+            ws_cs.cell(row=row, column=2, value=comparison.get("drawing_number", ""))
+            ws_cs.cell(row=row, column=3, value=comparison.get("line_no", ""))
+            ws_cs.cell(row=row, column=4, value=summary.get("total_bom_items", 0))
+            ws_cs.cell(row=row, column=5, value=comparable)
+            ws_cs.cell(row=row, column=6, value=matched)
+            ws_cs.cell(row=row, column=7, value=mismatched)
+            ws_cs.cell(row=row, column=8, value=bom_only)
+            ws_cs.cell(row=row, column=9, value=drawing_only)
+            ws_cs.cell(row=row, column=10, value=summary.get("match_rate", 0))
+            _style_data(ws_cs, row, len(hcs))
+
+            # 낮은 일치율 강조
+            if summary.get("match_rate", 100) < 50:
+                ws_cs.cell(row=row, column=10).fill = MISMATCH_FILL
+            row += 1
+
+        # 합계 행
+        ws_cs.cell(row=row + 1, column=1, value="TOTAL")
+        ws_cs.cell(row=row + 1, column=5, value=tot_comparable)
+        ws_cs.cell(row=row + 1, column=6, value=tot_matched)
+        ws_cs.cell(row=row + 1, column=7, value=tot_mismatched)
+        ws_cs.cell(row=row + 1, column=8, value=tot_bom_only)
+        ws_cs.cell(row=row + 1, column=9, value=tot_drawing_only)
+        overall_rate = round(tot_matched / max(1, tot_comparable) * 100, 1)
+        ws_cs.cell(row=row + 1, column=10, value=overall_rate)
+        _style_data(ws_cs, row + 1, len(hcs),
+                    font=Font(name="Arial", size=10, bold=True),
+                    fill=PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"))
+
+        for i, w in enumerate([6, 16, 8, 10, 10, 10, 10, 10, 10, 12], 1):
+            ws_cs.column_dimensions[get_column_letter(i)].width = w
+
     wb.save(output_path)
     logger.info(f"VLM BOM Excel saved: {output_path} ({total_items} BOM items, "
                 f"{valve_count} valves, {fitting_count} fittings)")
+    return output_path
+
+
+# ─── P&ID VLM 분석 Excel ─────────────────────────────
+
+def generate_pid_analysis_excel(valves: list[dict], line_specs: list[dict],
+                                 symbols_found: list[dict], output_path: str) -> str:
+    """P&ID VLM 분석 결과 Excel 생성 (3개 시트)"""
+    wb = openpyxl.Workbook()
+
+    # === Sheet 1: Pipe & Valve List ===
+    ws1 = wb.active
+    ws1.title = "Pipe & Valve List"
+    h1 = ["No", "Tag", "Symbol Type", "Valve Type", "Actuator", "Size",
+          "Line Spec", "Piping Class", "Schedule", "Pressure Rating",
+          "Material", "Fluid", "Description", "Sheet", "Source"]
+    for col, h in enumerate(h1, 1):
+        ws1.cell(row=1, column=col, value=h)
+    _style_header(ws1, 1, len(h1))
+
+    row = 2
+    for i, v in enumerate(valves, 1):
+        ws1.cell(row=row, column=1, value=i)
+        ws1.cell(row=row, column=2, value=v.get("tag", ""))
+        ws1.cell(row=row, column=3, value=v.get("valve_subtype", v.get("valve_type", "")))
+        ws1.cell(row=row, column=4, value=v.get("valve_type", ""))
+        ws1.cell(row=row, column=5, value=v.get("actuator", ""))
+        ws1.cell(row=row, column=6, value=v.get("size", ""))
+        ws1.cell(row=row, column=7, value=v.get("line_spec", ""))
+        ws1.cell(row=row, column=8, value=v.get("piping_class", ""))
+        ws1.cell(row=row, column=9, value=v.get("schedule", ""))
+        ws1.cell(row=row, column=10, value=v.get("pressure_rating", ""))
+        ws1.cell(row=row, column=11, value=v.get("material_code", ""))
+        ws1.cell(row=row, column=12, value=v.get("fluid", ""))
+        ws1.cell(row=row, column=13, value=v.get("description", ""))
+        ws1.cell(row=row, column=14, value=v.get("sheet", ""))
+        ws1.cell(row=row, column=15, value=v.get("source", ""))
+        _style_data(ws1, row, len(h1))
+
+        # VLM/Both 소스 강조
+        source = v.get("source", "")
+        if source == "vlm":
+            ws1.cell(row=row, column=15).fill = ACCENT_FILL
+        elif source == "both":
+            ws1.cell(row=row, column=15).fill = PatternFill(
+                start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+        row += 1
+
+    for i, w in enumerate([5, 12, 20, 12, 10, 6, 35, 10, 10, 12, 10, 6, 30, 6, 8], 1):
+        ws1.column_dimensions[get_column_letter(i)].width = w
+
+    # === Sheet 2: Line Specifications ===
+    ws2 = wb.create_sheet("Line Specifications")
+    h2 = ["No", "Full Spec", "Size", "System Code", "Line Number", "Tag",
+          "Piping Class", "Schedule", "Pressure Rating", "Material", "Fluid", "Sheet"]
+    for col, h in enumerate(h2, 1):
+        ws2.cell(row=1, column=col, value=h)
+    _style_header(ws2, 1, len(h2))
+
+    row = 2
+    for i, ls in enumerate(line_specs, 1):
+        ws2.cell(row=row, column=1, value=i)
+        ws2.cell(row=row, column=2, value=ls.get("full_spec", ""))
+        ws2.cell(row=row, column=3, value=ls.get("size", ""))
+        ws2.cell(row=row, column=4, value=ls.get("system_code", ""))
+        ws2.cell(row=row, column=5, value=ls.get("line_number", ""))
+        ws2.cell(row=row, column=6, value=ls.get("tag", ""))
+        ws2.cell(row=row, column=7, value=ls.get("piping_class", ""))
+        ws2.cell(row=row, column=8, value=ls.get("schedule", ""))
+        ws2.cell(row=row, column=9, value=ls.get("pressure_rating", ""))
+        ws2.cell(row=row, column=10, value=ls.get("material_code", ""))
+        ws2.cell(row=row, column=11, value=ls.get("fluid", ""))
+        ws2.cell(row=row, column=12, value=ls.get("sheet", ""))
+        _style_data(ws2, row, len(h2))
+        row += 1
+
+    for i, w in enumerate([5, 35, 6, 12, 12, 12, 10, 10, 12, 10, 6, 6], 1):
+        ws2.column_dimensions[get_column_letter(i)].width = w
+
+    # === Sheet 3: Summary ===
+    ws3 = wb.create_sheet("Summary")
+    valve_by_type = defaultdict(int)
+    for v in valves:
+        vt = v.get("valve_type", "UNKNOWN")
+        valve_by_type[vt] += 1
+
+    system_count = defaultdict(int)
+    for ls in line_specs:
+        sc = ls.get("system_code", "UNKNOWN")
+        system_count[sc] += 1
+
+    stats = [
+        ("P&ID ANALYSIS REPORT", ""),
+        ("", ""),
+        ("OVERVIEW", ""),
+        ("Total Line Specifications", len(line_specs)),
+        ("Total Valves", len(valves)),
+        ("Total Symbols Found", len(symbols_found)),
+        ("", ""),
+        ("VALVES BY TYPE", ""),
+    ]
+    for vt, cnt in sorted(valve_by_type.items()):
+        stats.append((f"  {vt}", cnt))
+    stats.extend([
+        ("", ""),
+        ("LINE SPECS BY SYSTEM", ""),
+    ])
+    for sc, cnt in sorted(system_count.items()):
+        stats.append((f"  {sc}", cnt))
+
+    for r, (label, value) in enumerate(stats, 1):
+        ws3.cell(row=r, column=1, value=label)
+        ws3.cell(row=r, column=2, value=value)
+        if label and not value and label == label.upper():
+            ws3.cell(row=r, column=1).font = Font(name="Arial", size=11, bold=True)
+        else:
+            ws3.cell(row=r, column=1).font = Font(name="Arial", size=10)
+            ws3.cell(row=r, column=2).font = Font(name="Arial", size=10)
+
+    ws3.column_dimensions["A"].width = 35
+    ws3.column_dimensions["B"].width = 50
+
+    wb.save(output_path)
+    logger.info(f"P&ID analysis Excel saved: {output_path} "
+                f"({len(valves)} valves, {len(line_specs)} line specs)")
     return output_path

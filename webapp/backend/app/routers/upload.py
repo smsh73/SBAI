@@ -8,6 +8,7 @@ from app.core.config import UPLOAD_DIR, OUTPUT_DIR, TEMPLATE_DIR
 from app.services import (
     dxf_service, pid_service, pipe_bom_service,
     excel_service, db_service, symbol_db_service, vlm_bom_service,
+    bom_comparison_service, pid_vlm_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ async def _process_file(session_id: str, file_path: str, file_type: str, filenam
                 json.dump(valves, f, ensure_ascii=False, indent=2)
 
             # 2. P&ID 레전드 심볼 추출 (첫 페이지)
+            symbols = []
             try:
                 symbols = symbol_db_service.extract_symbols_from_legend(
                     file_path, str(session_dir))
@@ -68,6 +70,38 @@ async def _process_file(session_id: str, file_path: str, file_type: str, filenam
                 logger.info(f"Symbol reference cached: {len(symbols)} symbols")
             except Exception as e:
                 logger.warning(f"Symbol extraction failed (non-critical): {e}")
+
+            # 3. VLM 기반 P&ID 페이지 분석 (2-3페이지)
+            try:
+                await db_service.update_session_status(session_id, "vlm_analyzing")
+                vlm_pid_result = pid_vlm_service.analyze_pid_pages(
+                    pdf_path=file_path,
+                    output_dir=str(session_dir),
+                    symbols=symbols,
+                )
+
+                # regex 결과와 VLM 결과 병합
+                enhanced_valves = pid_vlm_service.merge_regex_and_vlm(valves, vlm_pid_result)
+
+                # DB 저장
+                await db_service.save_pid_analysis(session_id, vlm_pid_result)
+
+                # P&ID 분석 Excel 생성
+                pid_excel_path = str(session_dir / "pid_analysis.xlsx")
+                excel_service.generate_pid_analysis_excel(
+                    valves=enhanced_valves,
+                    line_specs=vlm_pid_result.get("line_specs", []),
+                    symbols_found=vlm_pid_result.get("symbols_found", []),
+                    output_path=pid_excel_path,
+                )
+
+                # JSON 저장
+                with open(session_dir / "pid_vlm_analysis.json", "w") as f:
+                    json.dump(vlm_pid_result, f, ensure_ascii=False, indent=2)
+
+                logger.info(f"VLM P&ID analysis completed for session {session_id}")
+            except Exception as e:
+                logger.error(f"VLM P&ID analysis failed: {e}", exc_info=True)
 
         elif file_type == "pipe_bom":
             import json
@@ -96,12 +130,26 @@ async def _process_file(session_id: str, file_path: str, file_type: str, filenam
                 )
                 await db_service.save_vlm_bom(session_id, vlm_results)
 
-                # VLM 기반 정밀 Excel 생성
-                vlm_excel_path = str(session_dir / "vlm_pipe_bom.xlsx")
-                excel_service.generate_vlm_bom_excel(vlm_results, vlm_excel_path)
-
                 with open(session_dir / "vlm_bom_data.json", "w") as f:
                     json.dump(vlm_results, f, ensure_ascii=False, indent=2)
+
+                # BOM vs Drawing 비교
+                try:
+                    comparison_results = bom_comparison_service.compare_all_pages(vlm_results)
+                    for comp in comparison_results:
+                        for r in vlm_results:
+                            if r.get("page") == comp["page"]:
+                                r["comparison"] = comp
+                                break
+                    with open(session_dir / "bom_comparison.json", "w") as f:
+                        json.dump(comparison_results, f, ensure_ascii=False, indent=2)
+                    logger.info(f"BOM comparison completed for session {session_id}")
+                except Exception as e:
+                    logger.warning(f"BOM comparison failed (non-critical): {e}")
+
+                # VLM 기반 정밀 Excel 생성 (비교 결과 포함)
+                vlm_excel_path = str(session_dir / "vlm_pipe_bom.xlsx")
+                excel_service.generate_vlm_bom_excel(vlm_results, vlm_excel_path)
 
                 logger.info(f"VLM BOM analysis completed for session {session_id}")
             except Exception as e:

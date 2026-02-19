@@ -299,13 +299,9 @@ def _validate_and_clean(symbols: list[dict]) -> list[dict]:
 # ─────────────────────────────────────────
 def _crop_symbol_images(symbols: list[dict], hires_path: str,
                         symbols_dir: str, pdf_path: str) -> list[dict]:
-    """Text-position-based symbol cropping.
+    """Text-position-based symbol cropping with content-aware auto-trim.
 
-    Improvements over basic cropping:
-    - Groups symbols by column and uses midpoint between consecutive symbols
-      as row boundaries → full symbol height without clipping
-    - Left/right insets (8pt / 5pt) to exclude vertical grid lines
-    - Post-crop PIL-based vertical border trimming as safety net
+    Pipeline: generous initial crop → grid line removal → auto-crop to content.
     """
     from PIL import Image
 
@@ -321,12 +317,20 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
     scale_x = img_w / pw
     scale_y = img_h / ph
 
-    SYM_WIDTH_PT = 70      # Total width from description to left column border
-    LEFT_INSET_PT = 8      # Inset from left column border to avoid vertical line
-    RIGHT_INSET_PT = 5     # Inset from right (before description) to avoid vertical line
+    SYM_WIDTH_PT = 95      # Generous width to capture full pipe lines
+    RIGHT_INSET_PT = 3     # Small inset before description text
+    MIN_HEIGHT_PT = 15     # Minimum crop height in points
+    MAX_HEIGHT_PT = 80     # Maximum crop height (prevents multi-row capture)
+    EDGE_PAD_PT = 20       # Default padding for first/last items in column
 
-    MIN_HEIGHT_PT = 12     # Minimum crop height in points
-    MAX_HEIGHT_PT = 60     # Maximum crop height (prevents multi-row capture)
+    # ── Detect grid label zone (left margin of P&ID drawing frame) ──
+    # Grid labels (A-K) sit at the left page margin; we must crop AFTER them.
+    left_margin_x = 12.0   # Fallback minimum
+    for c in "ABCDEFGHJK":
+        for hr in page.search_for(c):
+            # Single-char labels near the left page edge
+            if hr.x0 < 45 and (hr.x1 - hr.x0) < 12:
+                left_margin_x = max(left_margin_x, hr.x1 + 5)
 
     # ── First pass: find all text positions (with VLM bbox hint) ──
     text_rects: dict[int, fitz.Rect] = {}
@@ -356,8 +360,24 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
         if not placed:
             columns.append([(idx, rect)])
 
+    # Find "SYMBOL" header y-position per column to exclude header text
+    col_header_y1: dict[int, float] = {}
+    for ci, col in enumerate(columns):
+        col.sort(key=lambda e: e[1].y0)
+        first_rect = col[0][1]
+        for header_text in ["SYMBOL"]:
+            hits = page.search_for(header_text)
+            for hr in hits:
+                if (abs(hr.x0 - first_rect.x0) < 120 and
+                        hr.y1 < first_rect.y0 and
+                        first_rect.y0 - hr.y1 < 35):
+                    col_header_y1[ci] = hr.y1
+                    break
+            if ci in col_header_y1:
+                break
+
     row_bounds: dict[int, tuple[float, float]] = {}
-    for col in columns:
+    for ci, col in enumerate(columns):
         col.sort(key=lambda e: e[1].y0)
         for i, (idx, rect) in enumerate(col):
             # Top: midpoint with previous symbol
@@ -365,14 +385,18 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
                 prev_rect = col[i - 1][1]
                 y_top = (prev_rect.y1 + rect.y0) / 2
             else:
-                y_top = max(0, rect.y0 - 15)
+                # First item: use header bottom or default padding
+                if ci in col_header_y1:
+                    y_top = col_header_y1[ci] + 3
+                else:
+                    y_top = max(0, rect.y0 - EDGE_PAD_PT)
 
             # Bottom: midpoint with next symbol
             if i < len(col) - 1:
                 next_rect = col[i + 1][1]
                 y_bottom = (rect.y1 + next_rect.y0) / 2
             else:
-                y_bottom = min(ph, rect.y1 + 15)
+                y_bottom = min(ph, rect.y1 + EDGE_PAD_PT)
 
             row_bounds[idx] = (y_top, y_bottom)
 
@@ -392,16 +416,17 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
                 min(ph, text_rect.y1 + 10),
             ))
             # Enforce minimum / maximum height
-            if y_bottom - y_top < MIN_HEIGHT_PT:
-                center_y = (y_top + y_bottom) / 2
-                y_top = max(0, center_y - MIN_HEIGHT_PT / 2)
-                y_bottom = min(ph, center_y + MIN_HEIGHT_PT / 2)
-            elif y_bottom - y_top > MAX_HEIGHT_PT:
-                center_y = (text_rect.y0 + text_rect.y1) / 2
-                y_top = max(0, center_y - MAX_HEIGHT_PT / 2)
-                y_bottom = min(ph, center_y + MAX_HEIGHT_PT / 2)
+            h_pt = y_bottom - y_top
+            if h_pt < MIN_HEIGHT_PT:
+                cy = (y_top + y_bottom) / 2
+                y_top = max(0, cy - MIN_HEIGHT_PT / 2)
+                y_bottom = min(ph, cy + MIN_HEIGHT_PT / 2)
+            elif h_pt > MAX_HEIGHT_PT:
+                cy = (text_rect.y0 + text_rect.y1) / 2
+                y_top = max(0, cy - MAX_HEIGHT_PT / 2)
+                y_bottom = min(ph, cy + MAX_HEIGHT_PT / 2)
 
-            sym_x0 = max(0, text_rect.x0 - SYM_WIDTH_PT + LEFT_INSET_PT)
+            sym_x0 = max(left_margin_x, text_rect.x0 - SYM_WIDTH_PT)
             sym_y0 = y_top
             sym_x1 = max(sym_x0 + 10, text_rect.x0 - RIGHT_INSET_PT)
             sym_y1 = y_bottom
@@ -413,11 +438,10 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
                 sym["image_filename"] = None
                 continue
             x1_pct, y1_pct, x2_pct, y2_pct = bbox_pct
-            sym_x0 = max(0, x1_pct * pw - 5)
-            sym_y0 = max(0, y1_pct * ph - 10)
-            sym_x1 = min(pw, x2_pct * pw + 5)
-            sym_y1 = min(ph, y2_pct * ph + 10)
-            # Enforce min/max height for fallback too
+            sym_x0 = max(0, x1_pct * pw - 10)
+            sym_y0 = max(0, y1_pct * ph - 15)
+            sym_x1 = min(pw, x2_pct * pw + 10)
+            sym_y1 = min(ph, y2_pct * ph + 15)
             h_pt = sym_y1 - sym_y0
             if h_pt < MIN_HEIGHT_PT:
                 cy = (sym_y0 + sym_y1) / 2
@@ -445,7 +469,8 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
 
         try:
             crop = hires_img.crop((px0, py0, px1, py1))
-            crop = _trim_vertical_borders(crop)
+            crop = _trim_grid_borders(crop)
+            crop = _auto_crop_to_content(crop, padding=8)
             crop.save(str(img_path))
             sym["image_path"] = str(img_path)
             sym["image_filename"] = img_filename
@@ -459,12 +484,8 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
     return symbols
 
 
-def _trim_vertical_borders(img):
-    """Remove vertical grid lines from left/right edges of cropped symbol image.
-
-    Scans edge columns for predominantly dark pixel columns (indicating a grid line)
-    and trims them with a small margin.
-    """
+def _trim_grid_borders(img):
+    """Remove vertical and horizontal grid lines from edges of cropped symbol."""
     w, h = img.size
     if h < 10 or w < 20:
         return img
@@ -473,35 +494,125 @@ def _trim_vertical_borders(img):
     pixels = gray.load()
 
     dark_threshold = 160
-    line_ratio = 0.6   # Column with >60% dark pixels = grid line (not symbol part)
-    max_check = min(25, w // 3)  # Scan up to 25px or 1/3 of width
+    line_ratio = 0.35  # Lower threshold to catch partial grid lines
+    max_check_x = min(30, w // 3)
+    max_check_y = min(25, h // 3)
 
-    # Scan left region: find rightmost line column within range
+    # Vertical lines (left/right)
     left = 0
-    for x in range(max_check):
+    for x in range(max_check_x):
         dark_count = sum(1 for y in range(h) if pixels[x, y] < dark_threshold)
         if dark_count / h > line_ratio:
             left = x + 1
 
-    # Scan right region: find leftmost line column within range
     right = w
-    for x in range(w - 1, max(w - 1 - max_check, 0), -1):
+    for x in range(w - 1, max(w - 1 - max_check_x, 0), -1):
         dark_count = sum(1 for y in range(h) if pixels[x, y] < dark_threshold)
         if dark_count / h > line_ratio:
             right = x
 
-    # Add margin past the detected line
+    # Horizontal lines (top/bottom)
+    top = 0
+    for y in range(max_check_y):
+        dark_count = sum(1 for x in range(w) if pixels[x, y] < dark_threshold)
+        if dark_count / w > line_ratio:
+            top = y + 1
+
+    bottom = h
+    for y in range(h - 1, max(h - 1 - max_check_y, 0), -1):
+        dark_count = sum(1 for x in range(w) if pixels[x, y] < dark_threshold)
+        if dark_count / w > line_ratio:
+            bottom = y
+
+    # Add margins past detected lines
     if left > 0:
         left = min(left + 4, w // 3)
     if right < w:
         right = max(right - 4, w * 2 // 3)
+    if top > 0:
+        top = min(top + 4, h // 3)
+    if bottom < h:
+        bottom = max(bottom - 4, h * 2 // 3)
 
-    if left >= right:
+    if left >= right or top >= bottom:
         return img
 
-    if left > 0 or right < w:
-        return img.crop((left, 0, right, h))
+    if left > 0 or right < w or top > 0 or bottom < h:
+        return img.crop((left, top, right, bottom))
     return img
+
+
+def _auto_crop_to_content(img, padding=8):
+    """Crop image to its actual visible content bounds with padding.
+
+    Uses PIL to find the bounding box of non-white pixels, then checks
+    for isolated edge content (grid labels, stray text) separated from
+    the main symbol by a vertical whitespace gap.
+    """
+    from PIL import ImageOps
+
+    gray = img.convert('L')
+    binary = gray.point(lambda p: 0 if p < 240 else 255)
+    inverted = ImageOps.invert(binary)
+    bbox = inverted.getbbox()
+
+    if not bbox:
+        return img
+
+    x_min, y_min, x_max, y_max = bbox
+    w, h = img.size
+
+    # ── Skip isolated left-edge content (grid labels like "K", "F") ──
+    # Scan columns from x_min rightward looking for a vertical gap
+    gap_min_width = 8  # Minimum gap width (px) to consider as separator
+    scan_limit = min(x_min + (x_max - x_min) // 3, w)
+    gap_start = -1
+    found_content = False
+    for x in range(x_min, scan_limit):
+        col_has_content = any(
+            inverted.getpixel((x, y)) > 0 for y in range(y_min, y_max))
+        if col_has_content:
+            found_content = True
+            if gap_start > 0:
+                gap_width = x - gap_start
+                if gap_width >= gap_min_width:
+                    # Found a real gap → content before gap is edge artifact
+                    x_min = x
+                    break
+            gap_start = -1
+        else:
+            if found_content and gap_start < 0:
+                gap_start = x
+
+    # ── Skip isolated top-edge content (header text like "SYMBOL") ──
+    scan_limit_y = min(y_min + (y_max - y_min) // 3, h)
+    gap_start = -1
+    found_content = False
+    for y in range(y_min, scan_limit_y):
+        row_has_content = any(
+            inverted.getpixel((x, y)) > 0 for x in range(x_min, x_max))
+        if row_has_content:
+            found_content = True
+            if gap_start > 0:
+                gap_height = y - gap_start
+                if gap_height >= 6:
+                    y_min = y
+                    break
+            gap_start = -1
+        else:
+            if found_content and gap_start < 0:
+                gap_start = y
+
+    # Add padding
+    x_min = max(0, x_min - padding)
+    y_min = max(0, y_min - padding)
+    x_max = min(w, x_max + padding)
+    y_max = min(h, y_max + padding)
+
+    if (x_max - x_min) < 20 or (y_max - y_min) < 15:
+        return img
+
+    return img.crop((x_min, y_min, x_max, y_max))
 
 
 def _find_text_on_page(page, description: str, bbox_hint=None):

@@ -80,6 +80,22 @@ CREATE TABLE IF NOT EXISTS vlm_bom (
     data_json TEXT
 );
 
+CREATE TABLE IF NOT EXISTS pid_analysis (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT REFERENCES sessions(id),
+    page INTEGER,
+    tag TEXT,
+    full_spec TEXT,
+    valve_type TEXT,
+    size TEXT,
+    piping_class TEXT,
+    schedule TEXT,
+    pressure_rating TEXT,
+    material_code TEXT,
+    fluid TEXT,
+    data_json TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_valves_session ON valves(session_id);
 CREATE INDEX IF NOT EXISTS idx_valves_tag ON valves(tag);
 CREATE INDEX IF NOT EXISTS idx_valves_type ON valves(valve_type);
@@ -87,6 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_bom_session ON pipe_bom(session_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_session ON symbols(session_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_category ON symbols(category);
 CREATE INDEX IF NOT EXISTS idx_vlm_bom_session ON vlm_bom(session_id);
+CREATE INDEX IF NOT EXISTS idx_pid_analysis_session ON pid_analysis(session_id);
 """
 
 
@@ -201,6 +218,42 @@ async def save_vlm_bom(session_id: str, pages_data: list[dict]):
             )
         await db.commit()
     logger.info(f"Saved VLM BOM data for {len(pages_data)} pages, session {session_id}")
+
+
+async def save_pid_analysis(session_id: str, vlm_result: dict):
+    """P&ID VLM 분석 결과 DB 저장 (라인스펙 + 밸브)"""
+    async with aiosqlite.connect(str(SQLITE_DB_PATH)) as db:
+        # 라인스펙 저장
+        for ls in vlm_result.get("line_specs", []):
+            await db.execute(
+                """INSERT INTO pid_analysis (session_id, page, tag, full_spec,
+                   valve_type, size, piping_class, schedule, pressure_rating,
+                   material_code, fluid, data_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (session_id, ls.get("sheet", 0), ls.get("tag", ""),
+                 ls.get("full_spec", ""), "LINE_SPEC",
+                 ls.get("size", ""), ls.get("piping_class", ""),
+                 ls.get("schedule", ""), ls.get("pressure_rating", ""),
+                 ls.get("material_code", ""), ls.get("fluid", ""),
+                 json.dumps(ls, ensure_ascii=False))
+            )
+        # 밸브 저장
+        for v in vlm_result.get("valves", []):
+            await db.execute(
+                """INSERT INTO pid_analysis (session_id, page, tag, full_spec,
+                   valve_type, size, piping_class, schedule, pressure_rating,
+                   material_code, fluid, data_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (session_id, v.get("sheet", 0), v.get("tag", ""),
+                 v.get("line_spec", ""), v.get("valve_type", ""),
+                 v.get("size", ""), v.get("piping_class", ""),
+                 v.get("schedule", ""), v.get("pressure_rating", ""),
+                 v.get("material_code", ""), v.get("fluid", ""),
+                 json.dumps(v, ensure_ascii=False))
+            )
+        await db.commit()
+    total = len(vlm_result.get("line_specs", [])) + len(vlm_result.get("valves", []))
+    logger.info(f"Saved {total} P&ID analysis items for session {session_id}")
 
 
 async def get_symbols(session_id: str = None) -> list[dict]:

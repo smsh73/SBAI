@@ -154,6 +154,46 @@ async def get_results(session_id: str):
         with open(stats_path) as f:
             preview["vlm_stats"] = json.load(f)
 
+    # BOM vs Drawing 비교 결과
+    comparison_path = session_dir / "bom_comparison.json"
+    if comparison_path.exists():
+        with open(comparison_path) as f:
+            comparison_data = json.load(f)
+        total_matched = sum(c.get("summary", {}).get("matched", 0) for c in comparison_data)
+        total_mismatched = sum(c.get("summary", {}).get("mismatched", 0) for c in comparison_data)
+        total_bom_only = sum(c.get("summary", {}).get("bom_only", 0) for c in comparison_data)
+        total_drawing_only = sum(c.get("summary", {}).get("drawing_only", 0) for c in comparison_data)
+        total_comparable = sum(c.get("summary", {}).get("comparable_items", 0) for c in comparison_data)
+        preview["bom_comparison"] = {
+            "pages_compared": len(comparison_data),
+            "overall": {
+                "total_comparable": total_comparable,
+                "total_matched": total_matched,
+                "total_mismatched": total_mismatched,
+                "total_bom_only": total_bom_only,
+                "total_drawing_only": total_drawing_only,
+                "match_rate": round(total_matched / max(1, total_comparable) * 100, 1),
+            },
+            "pages": comparison_data,
+        }
+
+    # P&ID VLM 분석 결과
+    pid_analysis_path = session_dir / "pid_vlm_analysis.json"
+    if pid_analysis_path.exists():
+        with open(pid_analysis_path) as f:
+            pid_analysis = json.load(f)
+        all_valves = pid_analysis.get("valves", [])
+        all_line_specs = pid_analysis.get("line_specs", [])
+        preview["pid_analysis"] = {
+            "total_line_specs": len(all_line_specs),
+            "total_valves": len(all_valves),
+            "total_symbols": len(pid_analysis.get("symbols_found", [])),
+            "pages_analyzed": pid_analysis.get("pages_analyzed", []),
+            "line_specs": all_line_specs,
+            "valves": all_valves,
+            "symbols_found": pid_analysis.get("symbols_found", []),
+        }
+
     return {
         "session_id": session_id,
         "status": session.get("status", "unknown"),
