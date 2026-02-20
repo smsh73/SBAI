@@ -16,8 +16,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NGINX_CONF: nginx.vm.conf
     ports:
-      - "5173:80"
+      - "80:80"
     depends_on:
       - backend
 
