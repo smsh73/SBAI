@@ -30,10 +30,20 @@ GARBAGE_PATTERNS = [
     r"^1[0-6]$|^[1-9]$",
     r"^(SYMBOL|DESCRIPTION|DISCRIPTION|SYMBOLS?)$",
     r"^(SHIP NO|CLIENT|DRAWING|REV\b|DATE|SCALE|CHECKED|APPROVED)",
-    r"^(AA\s*AA|NAN$|NN\")",
+    r"^(AA\s*AA|NAN\b|NN\")",
     r"^\s*$",
     r"^INSTRUMENT$",
+    r"^INSTRUMENT\s+VALVE\s+BODIES",
     r"^LEGEND SYMBOL",
+    r"^MOTOR[\-\s]*HELMET",
+    r"^(AA\s+)+",
+    r"^(NN\"\s*)+$",
+    r"^PIPING SYMBOLS",
+    r"^VALVE SYMBOLS",
+    r"^ACTUATORS?$",
+    r"^ACTUATED\s+VALVES?$",
+    r"^SAFETY\s+DEVICE",
+    r"^OTHER\s+SYMBOLS?",
 ]
 
 # ─────────────────────────────────────────
@@ -45,12 +55,19 @@ You are analyzing the LEGEND PAGE (page 1) of a P&ID drawing package for a ship/
 This page contains a SYMBOL LEGEND organized in columns/sections:
 
 ## SECTIONS (left to right):
-1. PIPING SYMBOLS (leftmost column) - Strainers, screens, vents, drains, expansion joints, sounding caps, deck scuppers, valves-as-piping-accessories
-2. VALVE SYMBOLS (second column) - Ball valve, gate valve, globe valve, check valve, needle valve, butterfly valve, plug valve, diaphragm valve, etc. in OPEN/CLOSED states
-3. ACTUATORS (third column, top area) - Hand operator, diaphragm/membrane, piston, motor, hydraulic actuators
-4. ACTUATED VALVES (third column, middle area) - Manual angle choke, control valves (general/modulating), self-contained pressure valves, isolation valves, solenoid valves (2/3/4 way)
-5. SAFETY DEVICE SYMBOLS (third column, bottom area) - Pressure relief/safety valves (conventional, balanced bellow, pilot), pressure/vacuum valve, rupture disc, vacuum relief
-6. OTHER SYMBOLS (rightmost column) - Flowmeters (coriolis, magnetic, venturi, vortex, turbine, ultrasonic, pitot), orifice plates, diaphragm seal, capacitance sensor, steam traps, horn/hooter
+1. PIPING SYMBOLS (leftmost area, split into 2 sub-columns):
+   - Left sub-column: Reducers, nozzles, flanges, couplings, caps, hose connections, spectacle flanges, spades, spacers, removable spools, vents, drains, funnels, tees, sample connections, sight glass, expansion joints, bulkhead penetrations
+   - Right sub-column: Strainers (temporary, conical, Y-type, T-type, basket), flame arrester, static mixer, straightening vane, air filter, mud/rose/drain boxes, liquid trap, flame/bug screens, vent heads, sounding caps, deck scuppers, silencer, bulkhead connector, quick closing valve, bellows expansion joint, self-closing valves, air release valve, hose connection valve, storm valve
+
+2. VALVE SYMBOLS (second column) - Ball valve (open/closed/cryogenic), butterfly valve, gate valve (open/closed/with body drain), globe valve, screw down non-return valve, hose valve, lift/swing/dual flap check valves, needle valve (open/closed), angle valve, three-way valves (L-port/T-port), four-way valve, plug valve (open/closed), diaphragm valve, deluge valve, axial choke valve, split wedge gate valve (cryogenic), double block and bleed variants, foot valve, feed-through, flow control ball float
+
+3. ACTUATORS (third column, top area) - Hand operator, diaphragm/membrane actuator, piston actuator, motor operated actuator, hydraulic operated actuator
+
+4. ACTUATED VALVES (third column, middle area) - Instrument valve bodies section header (skip this), manual angle choke valve, control valve (general/modulating), manually control valve (general/isolating), self-contained pressure control valves (downstream/upstream variants), isolation valve (general) on/off, solenoid valves (2-way/3-way/3-way with mechanical reset/4-way), three-part hand valve
+
+5. SAFETY DEVICE SYMBOLS (third column, bottom area) - Pressure relief/safety valves (conventional, balanced bellow, pilot) with (NOTE1), pressure/vacuum valve, rupture disc, vacuum relief valve/breaker valve
+
+6. OTHER SYMBOLS (rightmost column) - Instrument air, flowmeters (coriolis, magnetic, venturi, vortex, turbine, positive displacement, ultrasonic in-line/clamp-on, pitot tube, averaging pitot tube, variable area), flow element orifice type with carrier, restriction orifice, dynamic variable orifice, diaphragm seal, capacitance sensor, calibration pot, horn/hooter, steam traps (regular, disc type with valve, float type)
 
 Each symbol entry consists of:
 - A SYMBOL GRAPHIC (small technical drawing/icon) on the LEFT side
@@ -60,9 +77,15 @@ Each symbol entry consists of:
 Extract EVERY single symbol entry from ALL sections. For each symbol provide:
 
 1. **category**: One of: PIPING, VALVE, ACTUATOR, ACTUATED_VALVE, SAFETY_DEVICE, OTHER
-2. **symbol_name**: Short abbreviation/code if visible next to the symbol (e.g., "TS", "F", "M", "H", "AS", "C", "V", "R"). Empty string if no code is shown.
-3. **description**: Full description text exactly as written (e.g., "BALL VALVE (OPEN)", "TEMPORARY STRAINER", "PRESSURE RELIEF/SAFETY VALVE (CONVENTIONAL)")
-4. **bbox_pct**: Bounding box of the SYMBOL GRAPHIC ONLY (not the description text) as [x1_pct, y1_pct, x2_pct, y2_pct] where values are fractions (0.0 to 1.0) of the full page width and height. The box should tightly enclose just the graphical symbol/icon.
+2. **symbol_name**: Short abbreviation/code if visible INSIDE or NEAR the symbol graphic (e.g., "TS", "F", "M", "H", "AS", "C", "V", "R"). Empty string if no code is shown.
+3. **description**: Full description text exactly as written on the drawing. Read CAREFULLY - do not guess or hallucinate text.
+   - "CRYOGENIC" not "OPPOSING"
+   - "BUTTERFLY VALVE" not "BUTTERFLY V-ALVE"
+   - "ANGLE VALVE" not "SIMPLE VALVE"
+   - "THREE-WAY VALVE (L-PORT)" and "THREE-WAY VALVE (T-PORT)" as separate entries
+   - "ISOLATION VALVE (GENERAL), ON/OFF" not "SELF CON VALVE"
+   - "THREE PART HAND VALVE" not "THREE PART HARD VALVE"
+4. **bbox_pct**: Bounding box of the SYMBOL GRAPHIC ONLY (not the description text) as [x1_pct, y1_pct, x2_pct, y2_pct] where values are fractions (0.0 to 1.0) of the full page width and height. The box should tightly enclose just the graphical symbol/icon. Be PRECISE with the bounding box - it should NOT overlap with description text.
 
 ## CRITICAL RULES:
 1. Extract ALL symbols from ALL sections. Target: approximately 120-150 symbols total.
@@ -70,13 +93,16 @@ Extract EVERY single symbol entry from ALL sections. For each symbol provide:
    - "PRESSURE RELIEF/SAFETY VALVE" + "(CONVENTIONAL) (NOTE1)" → single entry: "PRESSURE RELIEF/SAFETY VALVE (CONVENTIONAL) (NOTE1)"
    - "SELF CONTAINED PRESSURE (CONTROL)" + "VALVE WITH INTERNAL IMPULSE LINE" + "(DOWNSTREAM)" → single entry
    - "SOUNDING CAP SELF CLOSING WEIGHT" + "WITH SELF CLOSING COCK" → single entry
-3. Do NOT include section headers ("PIPING SYMBOLS", "VALVE SYMBOLS", "ACTUATORS", etc.)
+   - "CONTROL VALVE(GENERAL)," + "MODULATING" → single entry: "CONTROL VALVE(GENERAL), MODULATING"
+   - "ISOLATION VALVE (GENERAL)," + "ON/OFF" → single entry: "ISOLATION VALVE (GENERAL), ON/OFF"
+3. Do NOT include section headers ("PIPING SYMBOLS", "VALVE SYMBOLS", "ACTUATORS", "INSTRUMENT VALVE BODIES", etc.)
 4. Do NOT include column headers ("SYMBOL", "DESCRIPTION", "DISCRIPTION")
 5. Do NOT include table grid border labels (single letters A-K, numbers 1-16)
 6. Do NOT include title block text (SHIP NO., CLIENT, DRAWING NO., REV, SCALE, etc.)
-7. For each valve that has OPEN and CLOSED variants, create SEPARATE entries for each.
-8. For "DOUBLE BLOCK AND BLEED" variants (general, ball valve, needle valve, plug valve, integrated), create SEPARATE entries.
-9. The bbox_pct should cover only the GRAPHIC SYMBOL area to the LEFT of the description text.
+7. Do NOT include "AA AA" placeholder text or "NN" dimension placeholders
+8. For each valve that has OPEN and CLOSED variants, create SEPARATE entries for each.
+9. For "DOUBLE BLOCK AND BLEED" variants (general, ball valve, needle valve, plug valve, integrated), create SEPARATE entries.
+10. The bbox_pct should cover ONLY the graphic symbol area to the LEFT of the description text.
 
 Return ONLY a valid JSON array (no markdown fences, no commentary):
 [
@@ -317,10 +343,10 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
     scale_x = img_w / pw
     scale_y = img_h / ph
 
-    SYM_WIDTH_PT = 95      # Generous width to capture full pipe lines
-    RIGHT_INSET_PT = 3     # Small inset before description text
+    SYM_WIDTH_PT = 70      # Symbol graphic width (reduced to avoid capturing description text)
+    RIGHT_INSET_PT = 12    # Inset before description text (larger to prevent text bleed)
     MIN_HEIGHT_PT = 15     # Minimum crop height in points
-    MAX_HEIGHT_PT = 80     # Maximum crop height (prevents multi-row capture)
+    MAX_HEIGHT_PT = 120    # Maximum crop height (increased for compound symbols like DBB)
     EDGE_PAD_PT = 20       # Default padding for first/last items in column
 
     # ── Detect grid label zone (left margin of P&ID drawing frame) ──
@@ -331,6 +357,23 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
             # Single-char labels near the left page edge
             if hr.x0 < 45 and (hr.x1 - hr.x0) < 12:
                 left_margin_x = max(left_margin_x, hr.x1 + 5)
+
+    # ── Detect vertical grid lines from PDF vector paths ──
+    # These define column boundaries more precisely than text positions
+    vert_grid_lines: list[float] = []
+    try:
+        drawings = page.get_drawings()
+        for d in drawings:
+            for item in d.get("items", []):
+                if item[0] == "l":  # line segment
+                    p1, p2 = item[1], item[2]
+                    # Vertical line: same x, spans significant height (>50% of page)
+                    if abs(p1.x - p2.x) < 1.0 and abs(p1.y - p2.y) > ph * 0.3:
+                        vert_grid_lines.append((p1.x + p2.x) / 2)
+        vert_grid_lines = sorted(set(round(x, 1) for x in vert_grid_lines))
+    except Exception:
+        vert_grid_lines = []
+    logger.info(f"Detected {len(vert_grid_lines)} vertical grid lines: {vert_grid_lines[:10]}")
 
     # ── First pass: find all text positions (with VLM bbox hint) ──
     text_rects: dict[int, fitz.Rect] = {}
@@ -353,33 +396,61 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
     for idx, rect in entries:
         placed = False
         for col in columns:
-            if abs(rect.x0 - col[0][1].x0) < 50:
+            # Use median x0 of existing column members for comparison
+            col_x_vals = [r.x0 for _, r in col]
+            col_median_x = sorted(col_x_vals)[len(col_x_vals) // 2]
+            if abs(rect.x0 - col_median_x) < 50:
                 col.append((idx, rect))
                 placed = True
                 break
         if not placed:
             columns.append([(idx, rect)])
+    # Sort columns left-to-right
+    columns.sort(key=lambda col: min(r.x0 for _, r in col))
 
-    # Find "SYMBOL" header y-position per column to exclude header text
+    # ── Compute per-column left boundary (using grid lines) ──
+    col_left_boundary: dict[int, float] = {}
+    for ci, col in enumerate(columns):
+        col_min_x = min(r.x0 for _, r in col)
+        # Find the nearest vertical grid line to the LEFT of this column's text
+        best_grid = left_margin_x
+        for gx in vert_grid_lines:
+            if gx < col_min_x - 3 and gx > best_grid:
+                # Ensure this grid line is close enough to be "our" column boundary
+                if col_min_x - gx < SYM_WIDTH_PT + 30:
+                    best_grid = gx
+        col_left_boundary[ci] = best_grid + 3  # Small offset past the line
+        logger.debug(f"Column {ci}: text_x={col_min_x:.1f}, left_bound={col_left_boundary[ci]:.1f}")
+
+    # Collect ALL header/sub-header text rects on the page.
+    # These are used both for per-column top-bound and per-symbol y_top clamping.
+    all_header_rects: list[fitz.Rect] = []
+    for header_text in ["SYMBOL", "DISCRIPTION", "DESCRIPTION"]:
+        all_header_rects.extend(page.search_for(header_text))
+    # Also collect section headers that appear mid-column
+    for sec_hdr in ["INSTRUMENT VALVE BODIES", "SAFETY DEVICE SYMBOLS",
+                     "ACTUATED VALVES", "ACTUATORS"]:
+        all_header_rects.extend(page.search_for(sec_hdr))
+
     col_header_y1: dict[int, float] = {}
     for ci, col in enumerate(columns):
         col.sort(key=lambda e: e[1].y0)
         first_rect = col[0][1]
-        for header_text in ["SYMBOL"]:
-            hits = page.search_for(header_text)
-            for hr in hits:
-                if (abs(hr.x0 - first_rect.x0) < 120 and
-                        hr.y1 < first_rect.y0 and
-                        first_rect.y0 - hr.y1 < 35):
-                    col_header_y1[ci] = hr.y1
-                    break
-            if ci in col_header_y1:
-                break
+        for hr in all_header_rects:
+            if (abs(hr.x0 - first_rect.x0) < 120 and
+                    hr.y1 < first_rect.y0 and
+                    first_rect.y0 - hr.y1 < 50):
+                existing_y = col_header_y1.get(ci, 0)
+                col_header_y1[ci] = max(existing_y, hr.y1)
+        if ci in col_header_y1:
+            break
 
     row_bounds: dict[int, tuple[float, float]] = {}
+    sym_col_map: dict[int, int] = {}  # symbol idx → column index
     for ci, col in enumerate(columns):
         col.sort(key=lambda e: e[1].y0)
         for i, (idx, rect) in enumerate(col):
+            sym_col_map[idx] = ci
             # Top: midpoint with previous symbol
             if i > 0:
                 prev_rect = col[i - 1][1]
@@ -399,6 +470,20 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
                 y_bottom = min(ph, rect.y1 + EDGE_PAD_PT)
 
             row_bounds[idx] = (y_top, y_bottom)
+
+    # ── Clamp y_top past any header/sub-header text between y_top and symbol text ──
+    # This handles mid-column sub-section headers like "INSTRUMENT VALVE BODIES"
+    # with its own "SYMBOL" / "DESCRIPTION" sub-headers.
+    for idx in list(row_bounds.keys()):
+        text_rect = text_rects.get(idx)
+        if not text_rect:
+            continue
+        y_top, y_bottom = row_bounds[idx]
+        for hr in all_header_rects:
+            if (abs(hr.x0 - text_rect.x0) < 150 and
+                    hr.y0 >= y_top - 2 and hr.y1 < text_rect.y0 - 1):
+                y_top = max(y_top, hr.y1 + 3)
+        row_bounds[idx] = (y_top, y_bottom)
 
     # ── Second pass: crop images ──
     for idx, sym in enumerate(symbols):
@@ -426,9 +511,23 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
                 y_top = max(0, cy - MAX_HEIGHT_PT / 2)
                 y_bottom = min(ph, cy + MAX_HEIGHT_PT / 2)
 
-            sym_x0 = max(left_margin_x, text_rect.x0 - SYM_WIDTH_PT)
+            # Use per-column left boundary if available
+            col_idx = sym_col_map.get(idx)
+            col_left = col_left_boundary.get(col_idx, left_margin_x) if col_idx is not None else left_margin_x
+
+            sym_x0 = max(col_left, text_rect.x0 - SYM_WIDTH_PT)
             sym_y0 = y_top
-            sym_x1 = max(sym_x0 + 10, text_rect.x0 - RIGHT_INSET_PT)
+
+            # Clamp right edge: find minimum x0 of any description text
+            # in overlapping Y range (prevents text bleed from adjacent rows)
+            right_clamp = text_rect.x0
+            for other_idx, other_rect in text_rects.items():
+                if other_idx == idx:
+                    continue
+                if other_rect.y0 < y_bottom and other_rect.y1 > y_top:
+                    if abs(other_rect.x0 - text_rect.x0) < 60:
+                        right_clamp = min(right_clamp, other_rect.x0)
+            sym_x1 = max(sym_x0 + 10, right_clamp - RIGHT_INSET_PT)
             sym_y1 = y_bottom
         else:
             # Fallback: use VLM bbox with generous padding
@@ -469,8 +568,9 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
 
         try:
             crop = hires_img.crop((px0, py0, px1, py1))
+            crop = _whiten_gray_background(crop)
             crop = _trim_grid_borders(crop)
-            crop = _auto_crop_to_content(crop, padding=8)
+            crop = _auto_crop_to_content(crop, padding=6)
             crop.save(str(img_path))
             sym["image_path"] = str(img_path)
             sym["image_filename"] = img_filename
@@ -484,8 +584,75 @@ def _crop_symbol_images(symbols: list[dict], hires_path: str,
     return symbols
 
 
+def _whiten_gray_background(img):
+    """Convert gray background to white, preserving dark lines and text.
+
+    Detects gray regions using two strategies:
+    1. Overall edge median check (catches full gray backgrounds)
+    2. Histogram-based check (catches partial gray backgrounds where
+       a significant portion of pixels are in the gray range 180-240)
+    """
+    import numpy as np
+
+    arr = np.array(img)
+    if arr.ndim == 3:
+        gray_arr = np.mean(arr, axis=2).astype(np.float32)
+    else:
+        gray_arr = arr.astype(np.float32)
+
+    h, w = gray_arr.shape
+    if h < 10 or w < 10:
+        return img
+
+    # Strategy 1: Check edge pixel median (catches full gray backgrounds)
+    edges = np.concatenate([
+        gray_arr[0, :], gray_arr[-1, :],
+        gray_arr[:, 0], gray_arr[:, -1],
+    ])
+    bg_median = np.median(edges)
+
+    do_whiten = False
+    bg_value = bg_median
+
+    if 180 <= bg_median <= 245:
+        do_whiten = True
+
+    # Strategy 2: Check if >15% of total pixels are in gray range 180-240
+    # This catches partial gray backgrounds (e.g., left half gray, right half white)
+    if not do_whiten:
+        gray_band = (gray_arr >= 180) & (gray_arr <= 240)
+        gray_frac = gray_band.sum() / gray_arr.size
+        if gray_frac > 0.15:
+            # Use the mode of gray-band pixels as the background value
+            gray_pixels = gray_arr[gray_band]
+            bg_value = np.median(gray_pixels)
+            do_whiten = True
+
+    if not do_whiten:
+        return img
+
+    # Replace pixels within ±25 of the detected gray value with white
+    tolerance = 25
+    low = bg_value - tolerance
+    high = bg_value + tolerance
+
+    if arr.ndim == 3:
+        mask = (gray_arr >= low) & (gray_arr <= high)
+        arr[mask] = [255, 255, 255]
+    else:
+        mask = (arr >= low) & (arr <= high)
+        arr[mask] = 255
+
+    from PIL import Image
+    return Image.fromarray(arr)
+
+
 def _trim_grid_borders(img):
-    """Remove vertical and horizontal grid lines from edges of cropped symbol."""
+    """Remove vertical and horizontal grid lines from edges of cropped symbol.
+
+    Uses two-pass detection: first a strict pass for obvious grid lines,
+    then a looser pass to catch thinner lines that span most of the image.
+    """
     w, h = img.size
     if h < 10 or w < 20:
         return img
@@ -493,46 +660,87 @@ def _trim_grid_borders(img):
     gray = img.convert('L')
     pixels = gray.load()
 
-    dark_threshold = 160
-    line_ratio = 0.35  # Lower threshold to catch partial grid lines
-    max_check_x = min(30, w // 3)
-    max_check_y = min(25, h // 3)
+    # Two-pass detection with different thresholds
+    dark_threshold_strict = 180   # Catch lighter grid lines too
+    dark_threshold_loose = 140    # For strong dark lines
+    line_ratio_strict = 0.25      # Lower ratio to catch partial grid lines
+    line_ratio_loose = 0.50       # Higher ratio for more conservative detection
+    max_check_x = min(40, w // 3)
+    max_check_y = min(30, h // 3)
 
-    # Vertical lines (left/right)
+    def _detect_vline(x_range, threshold, ratio):
+        """Find rightmost/leftmost grid line in given x range."""
+        best = -1
+        for x in x_range:
+            dark_count = sum(1 for y in range(h) if pixels[x, y] < threshold)
+            if dark_count / h > ratio:
+                best = x
+        return best
+
+    def _detect_hline(y_range, threshold, ratio):
+        """Find bottommost/topmost grid line in given y range."""
+        best = -1
+        for y in y_range:
+            dark_count = sum(1 for x in range(w) if pixels[x, y] < threshold)
+            if dark_count / w > ratio:
+                best = y
+        return best
+
+    # ── LEFT edge: detect vertical grid line ──
     left = 0
-    for x in range(max_check_x):
-        dark_count = sum(1 for y in range(h) if pixels[x, y] < dark_threshold)
-        if dark_count / h > line_ratio:
-            left = x + 1
+    # Strict pass (catches most grid lines)
+    vl = _detect_vline(range(max_check_x), dark_threshold_strict, line_ratio_strict)
+    if vl >= 0:
+        left = vl + 1
+    else:
+        # Loose pass (catches strong dark lines only)
+        vl = _detect_vline(range(min(15, w // 4)), dark_threshold_loose, line_ratio_loose)
+        if vl >= 0:
+            left = vl + 1
 
+    # ── RIGHT edge: detect vertical grid line ──
     right = w
-    for x in range(w - 1, max(w - 1 - max_check_x, 0), -1):
-        dark_count = sum(1 for y in range(h) if pixels[x, y] < dark_threshold)
-        if dark_count / h > line_ratio:
-            right = x
+    vr = _detect_vline(range(w - 1, max(w - 1 - max_check_x, 0), -1),
+                       dark_threshold_strict, line_ratio_strict)
+    if vr >= 0:
+        right = vr
+    else:
+        vr = _detect_vline(range(w - 1, max(w - 1 - 15, 0), -1),
+                           dark_threshold_loose, line_ratio_loose)
+        if vr >= 0:
+            right = vr
 
-    # Horizontal lines (top/bottom)
+    # ── TOP edge: detect horizontal grid line ──
     top = 0
-    for y in range(max_check_y):
-        dark_count = sum(1 for x in range(w) if pixels[x, y] < dark_threshold)
-        if dark_count / w > line_ratio:
-            top = y + 1
+    ht = _detect_hline(range(max_check_y), dark_threshold_strict, line_ratio_strict)
+    if ht >= 0:
+        top = ht + 1
+    else:
+        ht = _detect_hline(range(min(15, h // 4)), dark_threshold_loose, line_ratio_loose)
+        if ht >= 0:
+            top = ht + 1
 
+    # ── BOTTOM edge: detect horizontal grid line ──
     bottom = h
-    for y in range(h - 1, max(h - 1 - max_check_y, 0), -1):
-        dark_count = sum(1 for x in range(w) if pixels[x, y] < dark_threshold)
-        if dark_count / w > line_ratio:
-            bottom = y
+    hb = _detect_hline(range(h - 1, max(h - 1 - max_check_y, 0), -1),
+                       dark_threshold_strict, line_ratio_strict)
+    if hb >= 0:
+        bottom = hb
+    else:
+        hb = _detect_hline(range(h - 1, max(h - 1 - 15, 0), -1),
+                           dark_threshold_loose, line_ratio_loose)
+        if hb >= 0:
+            bottom = hb
 
-    # Add margins past detected lines
+    # Add margins past detected lines (move further inward to avoid line residue)
     if left > 0:
-        left = min(left + 4, w // 3)
+        left = min(left + 6, w // 3)
     if right < w:
-        right = max(right - 4, w * 2 // 3)
+        right = max(right - 6, w * 2 // 3)
     if top > 0:
-        top = min(top + 4, h // 3)
+        top = min(top + 5, h // 3)
     if bottom < h:
-        bottom = max(bottom - 4, h * 2 // 3)
+        bottom = max(bottom - 5, h * 2 // 3)
 
     if left >= right or top >= bottom:
         return img
@@ -542,17 +750,18 @@ def _trim_grid_borders(img):
     return img
 
 
-def _auto_crop_to_content(img, padding=8):
+def _auto_crop_to_content(img, padding=6):
     """Crop image to its actual visible content bounds with padding.
 
     Uses PIL to find the bounding box of non-white pixels, then checks
     for isolated edge content (grid labels, stray text) separated from
-    the main symbol by a vertical whitespace gap.
+    the main symbol by a whitespace gap on all four edges.
     """
     from PIL import ImageOps
+    import numpy as np
 
     gray = img.convert('L')
-    binary = gray.point(lambda p: 0 if p < 240 else 255)
+    binary = gray.point(lambda p: 0 if p < 235 else 255)
     inverted = ImageOps.invert(binary)
     bbox = inverted.getbbox()
 
@@ -562,46 +771,131 @@ def _auto_crop_to_content(img, padding=8):
     x_min, y_min, x_max, y_max = bbox
     w, h = img.size
 
-    # ── Skip isolated left-edge content (grid labels like "K", "F") ──
-    # Scan columns from x_min rightward looking for a vertical gap
-    gap_min_width = 8  # Minimum gap width (px) to consider as separator
-    scan_limit = min(x_min + (x_max - x_min) // 3, w)
-    gap_start = -1
-    found_content = False
-    for x in range(x_min, scan_limit):
-        col_has_content = any(
-            inverted.getpixel((x, y)) > 0 for y in range(y_min, y_max))
-        if col_has_content:
-            found_content = True
-            if gap_start > 0:
-                gap_width = x - gap_start
-                if gap_width >= gap_min_width:
-                    # Found a real gap → content before gap is edge artifact
-                    x_min = x
-                    break
-            gap_start = -1
-        else:
-            if found_content and gap_start < 0:
-                gap_start = x
+    # Convert to numpy for faster scanning
+    inv_arr = None
+    try:
+        inv_arr = __import__('numpy').array(inverted)
+    except ImportError:
+        pass
 
-    # ── Skip isolated top-edge content (header text like "SYMBOL") ──
-    scan_limit_y = min(y_min + (y_max - y_min) // 3, h)
-    gap_start = -1
-    found_content = False
-    for y in range(y_min, scan_limit_y):
-        row_has_content = any(
-            inverted.getpixel((x, y)) > 0 for x in range(x_min, x_max))
-        if row_has_content:
-            found_content = True
-            if gap_start > 0:
-                gap_height = y - gap_start
-                if gap_height >= 6:
-                    y_min = y
-                    break
+    def _col_has_content(x, ya, yb):
+        if inv_arr is not None:
+            return inv_arr[ya:yb, x].any()
+        return any(inverted.getpixel((x, y)) > 0 for y in range(ya, yb))
+
+    def _row_has_content(y, xa, xb):
+        if inv_arr is not None:
+            return inv_arr[y, xa:xb].any()
+        return any(inverted.getpixel((x, y)) > 0 for x in range(xa, xb))
+
+    gap_min_px = 3  # Minimum gap (px) to consider as separator (~0.7pt at 300 DPI)
+
+    def _strip_edge_content(start, total_span, is_horizontal, is_forward, bound_min, bound_max):
+        """Iteratively strip isolated content blocks separated by gaps.
+
+        Scans along one axis looking for gap→content patterns. Each time a
+        gap >= gap_min_px is found after content, the bound is moved past
+        the gap. Repeats to handle multiple stacked text blocks (e.g.,
+        "NN" → gap → "SYMBOL" → gap → actual symbol).
+
+        Safeguard: never strip more than 40% of the total span to prevent
+        removing the actual symbol content.
+        """
+        current_bound = start
+        max_passes = 3
+        max_strip = total_span * 2 // 5  # Never strip more than 40%
+
+        for _pass in range(max_passes):
+            # Check safeguard
+            stripped_so_far = abs(current_bound - start)
+            if stripped_so_far >= max_strip:
+                break
+
+            remaining = max_strip - stripped_so_far
+            if is_forward:
+                limit = min(current_bound + remaining, bound_max if is_horizontal else w)
+                check_range = range(current_bound, limit)
+            else:
+                limit = max(current_bound - remaining, 0)
+                check_range = range(current_bound, limit, -1)
+
             gap_start = -1
+            found_content = False
+            stripped = False
+            for pos in check_range:
+                if is_horizontal:
+                    has_content = _row_has_content(pos, bound_min, bound_max)
+                else:
+                    has_content = _col_has_content(pos, bound_min, bound_max)
+
+                if has_content:
+                    found_content = True
+                    if gap_start >= 0:
+                        gap_size = abs(pos - gap_start)
+                        if gap_size >= gap_min_px:
+                            current_bound = pos
+                            stripped = True
+                            break
+                    gap_start = -1
+                else:
+                    if found_content and gap_start < 0:
+                        gap_start = pos
+            if not stripped:
+                break
+        return current_bound
+
+    content_w = x_max - x_min
+    content_h = y_max - y_min
+
+    # ── Strip isolated TOP-edge content FIRST (headers "SYMBOL", "NN" text) ──
+    # Do top/bottom first so left/right scanning uses correct y range
+    y_min = _strip_edge_content(
+        y_min, content_h,
+        is_horizontal=True, is_forward=True,
+        bound_min=x_min, bound_max=x_max)
+
+    # ── Strip isolated BOTTOM-edge content ──
+    new_y_max = _strip_edge_content(
+        y_max - 1, content_h,
+        is_horizontal=True, is_forward=False,
+        bound_min=x_min, bound_max=x_max)
+    if new_y_max > y_min:
+        y_max = new_y_max + 1 if new_y_max < y_max - 1 else y_max
+
+    # ── Strip isolated LEFT-edge content (grid labels) ──
+    # Single pass only (max_passes=1 via small total_span trick) to avoid
+    # stripping small but valid symbols like flowmeter boxes [C], [M], [V]
+    left_strip_span = (x_max - x_min) // 4  # Only scan first 25%
+    gap_start_l = -1
+    found_l = False
+    for x in range(x_min, min(x_min + left_strip_span, w)):
+        has_c = _col_has_content(x, y_min, y_max)
+        if has_c:
+            found_l = True
+            if gap_start_l >= 0 and (x - gap_start_l) >= gap_min_px:
+                x_min = x
+                break
+            gap_start_l = -1
         else:
-            if found_content and gap_start < 0:
-                gap_start = y
+            if found_l and gap_start_l < 0:
+                gap_start_l = x
+
+    # ── Strip isolated RIGHT-edge content (text fragments) ──
+    # Scan up to 50% from right to catch description text bleed (e.g., "CORRIOL" from CORIOLIS)
+    right_strip_span = (x_max - x_min) // 2
+    gap_start_r = -1
+    found_r = False
+    for x in range(x_max - 1, max(x_max - 1 - right_strip_span, 0), -1):
+        has_c = _col_has_content(x, y_min, y_max)
+        if has_c:
+            found_r = True
+            if gap_start_r >= 0 and (gap_start_r - x) >= gap_min_px:
+                x_max = x + 1
+                break
+            gap_start_r = -1
+        else:
+            if found_r and gap_start_r < 0:
+                gap_start_r = x
 
     # Add padding
     x_min = max(0, x_min - padding)
